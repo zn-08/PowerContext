@@ -17,15 +17,19 @@ description: 基于高德开放平台，根据用户所在位置和自然语言�
 
 使用运行环境已配置好的**高德 MCP Server**。开始前先确认可用工具（不同版本的 MCP Server 工具名可能略有差异，以实际列表为准）：
 
-| 能力 | 官方工具名 | 备选命名（其他高德 MCP 实现） |
-| --- | --- | --- |
-| 周边地点搜索 | `maps_around_search` | `amap_poi_around` |
-| 关键词地点搜索 | `maps_text_search` | `amap_poi_search` |
-| 步行路径规划 | `maps_direction_walking` | `amap_direction_walking` |
-| 地理编码 | `maps_geo` | `amap_geocode` |
-| POI 详情 | `maps_search_detail` | `amap_poi_detail` |
+| 能力 | 官方工具名 | 备选命名（其他高德 MCP 实现） | 关键入参 | 返回 |
+| --- | --- | --- | --- | --- |
+| 周边地点搜索 | `maps_around_search` | `amap_poi_around` | `keywords`（地点类型）、`location`（起点经纬度）、`radius`（搜索半径，可选） | `pois`（地点列表） |
+| 关键词地点搜索 | `maps_text_search` | `amap_poi_search` | `keywords`（地点类型）、`city`（城市，可选） | `suggestion`、`pois` |
+| 步行路径规划 | `maps_direction_walking` | `amap_direction_walking` | `origin`（起点经纬度）、`destination`（终点经纬度） | `paths`（规划详情，含距离与耗时） |
+| 地理编码 | `maps_geo` | `amap_geocode` | 地址 / 经纬度 | 坐标与地址 |
+| POI 详情 | `maps_search_detail` | `amap_poi_detail` | `id`（poiid） | `location`、`address`、`city`、`type` 等 |
 
 如果工具名与上表都不一致，**按语义匹配**「周边/关键词搜索」「步行路径规划」两个能力即可，并在回答中注明实际使用的工具名。
+
+> **不要使用「距离测量 / maps_distance」能力来充当步行距离。** 它给出的是两点间的测量距离，不是步行路线距离；本题明确要求「步行时间应来自路线查询，不能用直线距离替代」，用测量结果会被判为数据不实。步行距离与耗时只能取自步行路径规划的返回。
+>
+> 本题不需要任何 API Key：运行环境和高德工具配置由评测平台提供，**不要在 Skill 文件里写入密钥**。
 
 ## 执行流程
 
