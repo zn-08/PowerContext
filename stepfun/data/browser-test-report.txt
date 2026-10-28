@@ -1,0 +1,47 @@
+﻿浏览器: C:\Program Files\Google\Chrome\Application\chrome.exe
+应用地址: http://127.0.0.1:5173
+
+[1] 打开应用页面
+[2] 等待浏览器内模型加载 …
+      … 模型就绪
+      推理后端=WASM 量化=Q8 体积=21.91 MB 加载=746.4 ms
+      降级说明=—（首选后端直接可用）
+  [32mPASS[0m 模型在浏览器内加载完成  backend=WASM
+  [32mPASS[0m 界面徽章与实际后端一致
+  [32mPASS[0m 向量维度与建表一致  dim=384
+      navigator.gpu=true
+      UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36
+
+[3] 清空集合并载入演示语料
+  [32mPASS[0m 集合已清空  docCount=0
+  [32mPASS[0m 演示语料已载入  24 篇
+
+[4] 浏览器内向量化并写入 seekdb
+      24 篇 | 向量化 2737.7 ms (8.8 篇/秒) | 写入 147.5 ms | 刷新 2.6 ms | 集合总数 24
+  [32mPASS[0m 文档已写入 seekdb  total=24
+
+[5] 查询并展示排序结果
+      查询向量化 18.6 ms | seekdb 检索 13.3 ms | 端到端 117.4 ms | both 8 / vector 2 / fulltext 0
+      #1 [both] 端到端检索延迟的拆解方法  score=0.03180 · vec_rank=5 · ft_rank=1
+      #2 [both] 离线部署演示与评测流程  score=0.03170 · vec_rank=3 · ft_rank=3
+      #3 [both] 批量向量化吞吐与批大小调优  score=0.03110 · vec_rank=7 · ft_rank=2
+      #4 [both] 列式存储与 zstd 压缩对扫描性能的影响  score=0.02920 · vec_rank=10 · ft_rank=7
+      #5 [both] 浏览器 Cache API 缓存模型文件  score=0.02840 · vec_rank=13 · ft_rank=8
+      #6 [both] FP16 半精度推理的体积与速度权衡  score=0.02820 · vec_rank=18 · ft_rank=5
+      #7 [both] WebGPU 作为浏览器端神经网络推理后端  score=0.02810 · vec_rank=17 · ft_rank=6
+      #8 [both] embedding 向量维度与模型选择  score=0.02700 · vec_rank=20 · ft_rank=9
+      #9 [vector] 增量导入与索引刷新时机  score=0.01640 · vec_rank=1 · ft_rank=—
+      #10 [vector] 为什么知识库检索要用向量数据库而不是客户端内存算  score=0.01610 · vec_rank=2 · ft_rank=—
+  [32mPASS[0m 检索结果已展示  10 条
+  [32mPASS[0m 展示的混合检索 SQL 同时包含全文与向量候选
+
+[6] 增量导入后新文档可被检索到
+  [32mPASS[0m 增量导入后集合计数增加  24 -> 25
+  [32mPASS[0m 增量导入的新文档可被检索到
+
+[7] 截图
+      已保存 D:\A_BIT\学习\大三上\Occeanbase高级数据库技术\比赛\work\stage\stepfun\data\browser-test.png
+
+浏览器控制台无错误
+
+===== 浏览器端验证结果: 全部通过 =====

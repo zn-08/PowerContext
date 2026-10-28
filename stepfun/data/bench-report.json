@@ -1,0 +1,170 @@
+﻿{
+  "generatedAt": "2026-10-28T05:31:38.930Z",
+  "device": "Node (onnxruntime-node / cpu)",
+  "results": [
+    {
+      "model": "Xenova/all-MiniLM-L6-v2",
+      "dtype": "q8",
+      "onnxBytes": 22972370,
+      "loadMs": "177.73",
+      "docEmbed": {
+        "first": "155.14",
+        "median": "179.22",
+        "throughput": "133.92"
+      },
+      "writeMs": "182.40",
+      "refreshMs": "3.40",
+      "queryEmbedMs": {
+        "first": "2.61",
+        "median": "3.53"
+      },
+      "dbSearchMs": {
+        "first": "6.64",
+        "median": "8.95"
+      },
+      "e2eMs": {
+        "first": "9.56",
+        "median": "12.56"
+      },
+      "quality": {
+        "recall": "0.540",
+        "ndcg": "0.535",
+        "mrr": "0.583"
+      }
+    },
+    {
+      "model": "Xenova/all-MiniLM-L6-v2",
+      "dtype": "fp16",
+      "onnxBytes": 45297825,
+      "loadMs": "200.80",
+      "docEmbed": {
+        "first": "448.45",
+        "median": "466.30",
+        "throughput": "51.47"
+      },
+      "writeMs": "113.63",
+      "refreshMs": "2.93",
+      "queryEmbedMs": {
+        "first": "8.76",
+        "median": "12.51"
+      },
+      "dbSearchMs": {
+        "first": "7.49",
+        "median": "9.48"
+      },
+      "e2eMs": {
+        "first": "16.55",
+        "median": "22.43"
+      },
+      "quality": {
+        "recall": "0.503",
+        "ndcg": "0.506",
+        "mrr": "0.578"
+      }
+    },
+    {
+      "model": "Xenova/all-MiniLM-L6-v2",
+      "dtype": "fp32",
+      "onnxBytes": 90387606,
+      "loadMs": "212.57",
+      "docEmbed": {
+        "first": "313.77",
+        "median": "360.88",
+        "throughput": "66.50"
+      },
+      "writeMs": "152.75",
+      "refreshMs": "4.25",
+      "queryEmbedMs": {
+        "first": "3.14",
+        "median": "4.57"
+      },
+      "dbSearchMs": {
+        "first": "7.47",
+        "median": "9.48"
+      },
+      "e2eMs": {
+        "first": "11.08",
+        "median": "14.28"
+      },
+      "quality": {
+        "recall": "0.503",
+        "ndcg": "0.506",
+        "mrr": "0.578"
+      }
+    },
+    {
+      "model": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+      "dtype": "q8",
+      "onnxBytes": 118308126,
+      "loadMs": "993.14",
+      "docEmbed": {
+        "first": "296.08",
+        "median": "312.80",
+        "throughput": "76.73"
+      },
+      "writeMs": "216.31",
+      "refreshMs": "3.56",
+      "queryEmbedMs": {
+        "first": "4.43",
+        "median": "6.71"
+      },
+      "dbSearchMs": {
+        "first": "7.59",
+        "median": "9.35"
+      },
+      "e2eMs": {
+        "first": "12.70",
+        "median": "16.61"
+      },
+      "quality": {
+        "recall": "0.790",
+        "ndcg": "0.821",
+        "mrr": "0.926"
+      }
+    },
+    {
+      "model": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+      "dtype": "fp32",
+      "onnxBytes": 470268510,
+      "loadMs": "1867.86",
+      "docEmbed": {
+        "first": "563.96",
+        "median": "593.46",
+        "throughput": "40.44"
+      },
+      "writeMs": "198.84",
+      "refreshMs": "2.79",
+      "queryEmbedMs": {
+        "first": "6.00",
+        "median": "9.67"
+      },
+      "dbSearchMs": {
+        "first": "8.89",
+        "median": "11.31"
+      },
+      "e2eMs": {
+        "first": "17.10",
+        "median": "22.19"
+      },
+      "quality": {
+        "recall": "0.790",
+        "ndcg": "0.829",
+        "mrr": "0.944"
+      }
+    }
+  ],
+  "http": {
+    "importTotalMs": "214.14",
+    "writeMs": "194.75",
+    "refreshMs": "2.97",
+    "dbSearchMs": {
+      "first": "7.75",
+      "median": "9.59"
+    },
+    "e2eMs": {
+      "first": "10.92",
+      "median": "26.86"
+    },
+    "n": 54
+  }
+}

@@ -1,0 +1,151 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>阶跃星辰 · 端侧 AI 推理 + seekdb 混合检索</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">◆</span>
+    <div>
+      <h1>阶跃星辰 · 端侧 AI 推理性能优化与 seekdb 混合检索</h1>
+      <p class="sub">浏览器内本地 Embedding（WebGPU → WASM 自动降级）· 向量 / 原文 / 元数据全部存储于 seekdb · 混合检索由 seekdb 单条 SQL 完成</p>
+    </div>
+  </div>
+  <div class="badges">
+    <div class="badge" id="badgeDevice"><span class="k">推理后端</span><span class="v" id="deviceValue">未加载</span></div>
+    <div class="badge" id="badgeDtype"><span class="k">量化</span><span class="v" id="dtypeValue">—</span></div>
+    <div class="badge" id="badgeModel"><span class="k">模型</span><span class="v" id="modelValue">—</span></div>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- ============ 左栏：控制面板 ============ -->
+  <section class="col-left">
+    <!-- 模型 -->
+    <div class="card">
+      <h2>1 · 端侧推理</h2>
+      <div class="row">
+        <label>模型</label>
+        <select id="modelSelect"></select>
+      </div>
+      <div class="row">
+        <label>量化档位</label>
+        <select id="dtypeSelect">
+          <option value="q8">INT8 (q8, onnx/model_quantized.onnx)</option>
+          <option value="fp16">FP16 (onnx/model_fp16.onnx)</option>
+          <option value="fp32">FP32 (onnx/model.onnx, 基线)</option>
+        </select>
+      </div>
+      <div class="row">
+        <button id="btnLoadModel" class="btn primary">加载 / 重载模型</button>
+      </div>
+      <div class="progress hidden" id="modelProgress"><div class="bar" id="modelBar"></div></div>
+      <div class="progress-text" id="modelProgressText">—</div>
+      <table class="kv" id="modelTable">
+        <tr><th>推理后端</th><td id="mDevice">—</td></tr>
+        <tr><th>降级原因</th><td id="mFallback">—</td></tr>
+        <tr><th>模型来源</th><td id="mSource">—</td></tr>
+        <tr><th>量化方式</th><td id="mQuant">—</td></tr>
+        <tr><th>模型体积</th><td id="mSize">—</td></tr>
+        <tr><th>加载耗时</th><td id="mLoadMs">—</td></tr>
+        <tr><th>向量维度</th><td id="mDim">—</td></tr>
+      </table>
+      <p class="note">全部计算在浏览器本机完成，<b>不调用任何云端推理 API</b>。模型文件从本机 <code>/models/</code> 目录加载（离线可用）。</p>
+    </div>
+
+    <!-- 导入 -->
+    <div class="card">
+      <h2>2 · 导入文档</h2>
+      <div class="row">
+        <button id="btnLoadCorpus" class="btn">载入演示语料</button>
+        <button id="btnClearCorpus" class="btn ghost">清空</button>
+      </div>
+      <textarea id="docInput" rows="8" placeholder="每行一篇文档，格式：标题 | 正文
+例：向量索引说明 | HNSW 是一种基于图的高维近邻检索结构…"></textarea>
+      <div class="row">
+        <button id="btnImport" class="btn primary">向量化并写入 seekdb</button>
+        <button id="btnReset" class="btn ghost danger">清空集合</button>
+      </div>
+      <p class="note">向量化在浏览器内完成，后端只接收「向量 + 原文 + 元数据」并写入 seekdb（同一 id 幂等覆盖，支持增量导入）。</p>
+      <table class="kv" id="importTable">
+        <tr><th>文档数</th><td id="iCount">—</td></tr>
+        <tr><th>向量化吞吐</th><td id="iThroughput">—</td></tr>
+        <tr><th>向量化耗时</th><td id="iEmbedMs">—</td></tr>
+        <tr><th>写入耗时</th><td id="iWriteMs">—</td></tr>
+        <tr><th>索引刷新耗时</th><td id="iRefreshMs">—</td></tr>
+        <tr><th>集合文档总数</th><td id="iTotal">—</td></tr>
+      </table>
+    </div>
+
+    <!-- 状态 -->
+    <div class="card">
+      <h2>3 · seekdb 状态</h2>
+      <table class="kv">
+        <tr><th>连接</th><td id="sConn">—</td></tr>
+        <tr><th>版本</th><td id="sVersion">—</td></tr>
+        <tr><th>数据库 / 集合</th><td id="sDb">—</td></tr>
+        <tr><th>文档数</th><td id="sCount">—</td></tr>
+        <tr><th>会话 ID</th><td id="sSession">—</td></tr>
+      </table>
+      <div class="row">
+        <button id="btnRefreshIdx" class="btn ghost">刷新索引</button>
+        <button id="btnExplain" class="btn ghost">查看混合检索执行计划</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 右栏：检索 ============ -->
+  <section class="col-right">
+    <div class="card">
+      <h2>4 · 混合检索</h2>
+      <div class="query-row">
+        <input id="queryInput" type="text" placeholder="输入查询，例如：端侧模型量化能省多少体积" />
+        <select id="topK">
+          <option value="5">Top 5</option>
+          <option value="10" selected>Top 10</option>
+          <option value="20">Top 20</option>
+        </select>
+        <select id="modeSelect" title="混合检索实现方式">
+          <option value="native">原生 DBMS_HYBRID_SEARCH</option>
+          <option value="sql">手写单条 RRF SQL</option>
+        </select>
+        <button id="btnSearch" class="btn primary">检索</button>
+      </div>
+      <div class="row">
+        <span class="hint">示例查询：</span>
+        <button class="chip" data-q="端侧模型量化能省多少体积">量化体积</button>
+        <button class="chip" data-q="how to build a vector index in oceanbase">vector index</button>
+        <button class="chip" data-q="浏览器里怎么让模型跑在 GPU 上">webgpu</button>
+        <button class="chip" data-q="全文和向量一起排序怎么实现">hybrid rrf</button>
+      </div>
+      <table class="kv" id="queryTable">
+        <tr><th>查询向量化</th><td id="qEmbedMs">—</td></tr>
+        <tr><th>seekdb 检索</th><td id="qDbMs">—</td></tr>
+        <tr><th>端到端延迟</th><td id="qE2eMs">—</td></tr>
+        <tr><th>命中方式</th><td id="qHit">—</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>5 · 检索结果（按 seekdb 返回的融合分数排序）</h2>
+      <div id="results" class="results"><p class="empty">尚未检索。先在左侧「导入文档」，再输入查询。</p></div>
+    </div>
+
+    <div class="card collapsible">
+      <h2 class="toggle">混合检索 SQL（由 seekdb 执行）<span class="arrow">▾</span></h2>
+      <div class="collapse-body">
+        <p class="note" id="sqlNote">默认模式：OceanBase 原生 <code>DBMS_HYBRID_SEARCH</code>——数据库生成并执行一条同时包含「全文候选」与「向量候选」的 SQL，RRF 融合全部在数据库内完成。</p>
+        <pre id="sqlBox" class="sql">（执行一次检索后显示）</pre>
+        <pre id="planBox" class="sql plan">（点击「查看混合检索执行计划」显示 EXPLAIN 输出）</pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

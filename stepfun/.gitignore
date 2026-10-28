@@ -1,0 +1,14 @@
+﻿# 依赖与模型不入库：按 README 的说明离线获取
+node_modules/
+
+# 只入库 INT8(q8) 权重的 all-MiniLM-L6-v2，其余精度与多语模型按需获取
+models/**/onnx/model.onnx
+models/**/onnx/model_fp16.onnx
+models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/
+
+# 本地数据库与运行期产物
+*.db
+*.db-journal
+*.log
+tmp/
+.DS_Store

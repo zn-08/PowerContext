@@ -1,0 +1,29 @@
+﻿{
+  "name": "stepfun-seekdb-hybrid-kb",
+  "version": "1.0.0",
+  "private": true,
+  "description": "阶跃星辰：端侧 AI 推理性能优化与 seekdb 混合检索 — 浏览器端迷你知识库",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "serve": "node server/index.js",
+    "setup-db": "node scripts/setup-db.js",
+    "selftest": "node scripts/selftest.js",
+    "bench": "node scripts/bench.js",
+    "browser-test": "node scripts/browser-test.js",
+    "browser-bench": "node scripts/browser-bench.js",
+    "fetch-model": "node scripts/fetch-model.js"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "3.7.6",
+    "mysql2": "^3.11.5",
+    "seekdb": "^1.4.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.1"
+  }
+}
