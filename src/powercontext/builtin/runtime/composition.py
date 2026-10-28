@@ -21,6 +21,7 @@ import logging
 import os
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager, nullcontext
+from dataclasses import replace
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
@@ -692,6 +693,24 @@ def _validate_processing_source_registry(
         raise BuiltinConfigurationError("artifact-processing-source-registry")
 
 
+_SOURCE_COUNT_THRESHOLD_FIELDS = {
+    "memory": "memory_source_count_threshold",
+    "topic-memory": "topic_memory_source_count_threshold",
+}
+
+
+def _source_count_threshold(runtime: RuntimeConfig, family: str) -> int | None:
+    """Return the configured Source-count admission threshold of one Family.
+
+    ``None`` keeps the count condition disabled, so the Family keeps its
+    original time based admission. Only Memory and Topic Memory count their
+    own Source journal entries.
+    """
+
+    field = _SOURCE_COUNT_THRESHOLD_FIELDS.get(family)
+    return None if field is None else getattr(runtime, field)
+
+
 def _artifact_processing_bindings(  # noqa: C901 - validate and assemble one registration per Family
     config: BuiltinConfig,
     contexts: RelationalContexts,
@@ -704,7 +723,12 @@ def _artifact_processing_bindings(  # noqa: C901 - validate and assemble one reg
     worker_security: dict[str, Any] | None = None,
     source_registry: SourceDefinitionRegistry = BUILTIN_SOURCE_REGISTRY,
 ) -> tuple[ArtifactProcessingBinding, ...]:
-    configured = list(bindings)
+    configured: list[ArtifactProcessingBinding] = []
+    for binding in bindings:
+        threshold = _source_count_threshold(config.runtime, binding.artifact_family)
+        if threshold is not None and binding.source_count_threshold is None:
+            binding = replace(binding, source_count_threshold=threshold)
+        configured.append(binding)
     _validate_processing_registrations(configured)
     capabilities = processing_capabilities(config)
     canonical = {**FAMILY_BINDINGS, "topic-memory": TOPIC_MEMORY_SOURCE_WINDOW_BINDING}
@@ -787,6 +811,7 @@ def _artifact_processing_bindings(  # noqa: C901 - validate and assemble one reg
                 if family == "skill"
                 else SourceProcessingPendingProvider(contexts.database, binding, family),
                 automatic_scope_filter=enabled_profile_scopes if family == "profile" else None,
+                source_count_threshold=_source_count_threshold(config.runtime, family),
             )
         )
     _validate_processing_registrations(configured)

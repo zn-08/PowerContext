@@ -47,6 +47,7 @@ from powercontext.builtin.persistence.oceanbase import OceanBaseConfig
 from powercontext.builtin.persistence.seekdb import SeekDBConfig
 from powercontext.builtin.persistence.sqlite import SQLiteConfig
 from powercontext.builtin.runtime._scope_cache import DEFAULT_SCOPE_CACHE_SIZE
+from powercontext.triggers.count_trigger import validate_source_count_threshold
 
 _HTTP_FIELD_NAME_PATTERN = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+")
 _RECALL_GATE_BASE_MIN_SEMANTIC_SIMILARITY = 0.3
@@ -201,6 +202,7 @@ class RuntimeConfig(BaseModel):
 
     schedule_seconds: float | None = Field(default=None, gt=0)
     memory_schedule_seconds: float | None = Field(default=None, gt=0)
+    memory_source_count_threshold: int | None = Field(default=None, ge=1)
     experience_schedule_seconds: float | None = Field(default=None, gt=0)
     dream_enabled: bool = True
     dream_max_pending_per_scope: int = Field(default=32, ge=1, le=1000)
@@ -208,6 +210,7 @@ class RuntimeConfig(BaseModel):
     dream_budget: DreamBudget = Field(default_factory=DreamBudget)
     topic_memory_schedule_seconds: float | None = Field(default=None, gt=0)
     topic_memory_source_window_limit: int = Field(default=10, ge=1)
+    topic_memory_source_count_threshold: int | None = Field(default=None, ge=1)
     topic_memory_history_max_candidates: int = Field(default=20, ge=1, le=MAX_TOPIC_MEMORY_SEARCH_LIMIT)
     topic_memory_history_rrf_threshold: int = Field(default=70, ge=0, le=100)
     topic_memory_history_min_candidates: int = Field(default=5, ge=1, le=MAX_TOPIC_MEMORY_SEARCH_LIMIT)
@@ -229,6 +232,17 @@ class RuntimeConfig(BaseModel):
     model_usage_queue_capacity: int = Field(default=256, ge=1, le=16_384)
     model_usage_write_timeout_seconds: float = Field(default=1.0, gt=0, le=30)
     model_usage_flush_timeout_seconds: float = Field(default=0.5, gt=0, le=30)
+
+    @field_validator(
+        "memory_source_count_threshold",
+        "topic_memory_source_count_threshold",
+        mode="before",
+    )
+    @classmethod
+    def validate_source_count_thresholds(cls, value: Any) -> Any:
+        """Keep every count threshold a strict positive integer or disabled."""
+
+        return validate_source_count_threshold(value)
 
     @model_validator(mode="after")
     def validate_topic_memory_history_candidates(self) -> RuntimeConfig:

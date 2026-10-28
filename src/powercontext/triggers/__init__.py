@@ -14,10 +14,26 @@
 
 """Pure Trigger contracts for integration-owned runtimes."""
 
+from powercontext.triggers.count_trigger import (
+    SOURCE_COUNT_TRIGGER_NAME,
+    AdmitSourceCount,
+    SourceCountSignal,
+    SourceCountState,
+    SourceCountTrigger,
+    pending_source_count,
+    validate_source_count_threshold,
+)
 from powercontext.triggers.models import PolicyTransition
 from powercontext.triggers.protocols import Trigger
 
 __all__ = [
+    "SOURCE_COUNT_TRIGGER_NAME",
+    "AdmitSourceCount",
     "PolicyTransition",
+    "SourceCountSignal",
+    "SourceCountState",
+    "SourceCountTrigger",
     "Trigger",
+    "pending_source_count",
+    "validate_source_count_threshold",
 ]
