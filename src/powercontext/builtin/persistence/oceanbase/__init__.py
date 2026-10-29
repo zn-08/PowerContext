@@ -14,6 +14,11 @@
 
 """OceanBase async relational profile."""
 
+from powercontext.builtin.persistence.oceanbase.memory_index import (
+    OceanBaseMemoryFTSIndex,
+    OceanBaseMemoryHybridIndex,
+    OceanBaseMemoryVectorIndex,
+)
 from powercontext.builtin.persistence.oceanbase.profile import (
     IncompatibleOceanBaseSchemaError,
     OceanBaseConfig,
@@ -28,6 +33,9 @@ from powercontext.builtin.persistence.oceanbase.topic_memory_index import (
 __all__ = (
     "IncompatibleOceanBaseSchemaError",
     "OceanBaseConfig",
+    "OceanBaseMemoryFTSIndex",
+    "OceanBaseMemoryHybridIndex",
+    "OceanBaseMemoryVectorIndex",
     "OceanBaseProfile",
     "OceanBaseTopicMemoryFTSIndex",
     "OceanBaseTopicMemoryVectorIndex",
