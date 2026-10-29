@@ -116,6 +116,11 @@ from powercontext.builtin.runtime.decision_model import (
     StructuredDecisionModel,
 )
 from powercontext.builtin.runtime.errors import InvalidRuntimeRequestError, TopicMemoryProcessingUnavailableError
+from powercontext.builtin.runtime.evidence_selection import (
+    EvidenceCandidate,
+    EvidenceSpan,
+    select_evidence_spans,
+)
 from powercontext.builtin.runtime.memory_write_gate import (
     DecisionMemoryWriteGate,
     MemoryWriteAssessment,
@@ -177,6 +182,13 @@ from powercontext.builtin.runtime.models import (
     SourceReceipt,
     SubmitSourceObservation,
     TopicMemoryFlushResult,
+)
+from powercontext.builtin.runtime.prepared_context import (
+    MemoryEntryAddress,
+    PreparedContextBuild,
+    PreparedContextBuilder,
+    PreparedContextFragment,
+    PreparedMemoryCandidates,
 )
 from powercontext.builtin.runtime.protocols import PowerContextProvider, RemoteIngestion
 from powercontext.builtin.runtime.readiness import (
@@ -259,6 +271,8 @@ __all__ = [
     "DreamApplication",
     "DreamRun",
     "DreamRunPage",
+    "EvidenceCandidate",
+    "EvidenceSpan",
     "ExperienceApplication",
     "ExperienceCandidate",
     "ExperienceCandidatePage",
@@ -305,6 +319,7 @@ __all__ = [
     "MemoryChangesPage",
     "MemoryCitation",
     "MemoryEntriesPage",
+    "MemoryEntryAddress",
     "MemoryEntryInput",
     "MemoryEntryInventoryStatistics",
     "MemoryEntryRecord",
@@ -332,7 +347,11 @@ __all__ = [
     "PrepareContextRequest",
     "PrepareHandoff",
     "PreparedContext",
+    "PreparedContextBuild",
+    "PreparedContextBuilder",
+    "PreparedContextFragment",
     "PreparedHandoff",
+    "PreparedMemoryCandidates",
     "ProposeExperienceRequest",
     "ProposeSkillRequest",
     "ReadinessCheckStatus",
@@ -401,4 +420,5 @@ __all__ = [
     "open_builtin_contexts",
     "open_builtin_runtime",
     "preflight_builtin_runtime",
+    "select_evidence_spans",
 ]

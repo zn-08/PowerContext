@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from itertools import chain
 from typing import TypeVar
@@ -28,6 +28,11 @@ from powercontext.builtin.artifacts.memory.models import MemoryCitation, MemoryH
 from powercontext.builtin.artifacts.profile.models import Profile
 from powercontext.builtin.artifacts.topic_memory import TopicMemory, TopicMemorySearchHit
 from powercontext.builtin.runtime.errors import PreparedContextInvariantError
+from powercontext.builtin.runtime.evidence_selection import (
+    EvidenceCandidate,
+    EvidenceSpan,
+    select_evidence_spans,
+)
 from powercontext.builtin.runtime.models import PrepareContextRequest, PreparedContext
 from powercontext.builtin.runtime.prepared_code import (
     CodeEvidenceRef,
@@ -56,6 +61,16 @@ class _PreparedContextEntry:
     citation: dict[str, object]
     content: str
     truncated: bool
+
+
+@dataclass(frozen=True)
+class _EvidenceEntry:
+    """One Memory entry that evidence selection may cut fragments from."""
+
+    key: str
+    address: MemoryEntryAddress
+    citation: dict[str, object]
+    text: str
 
 
 @dataclass(frozen=True)
@@ -100,12 +115,18 @@ class PreparedContextBuild:
     **not** a field here: ``ScopedContextApplication._prepare`` returns ``build.context`` and
     discards the rest, so such a field would have no production observer. The trace is
     delivered through the Runtime's optional ``RecallEffortSink`` instead.
+
+    ``fragments`` is filled by evidence selection only. It carries the exact original-text
+    range of every delivered fragment, so a caller can verify a fragment against the entry
+    it came from. An ordinary prepare delivers whole entries and therefore reports no
+    fragments.
     """
 
     context: PreparedContext
     origins: tuple[PreparedContextOrigin, ...]
     omissions: PreparedContextOmissions = PreparedContextOmissions()
     code_origins: tuple[CodeEvidenceRef, ...] = ()
+    fragments: tuple[PreparedContextFragment, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -115,6 +136,20 @@ class MemoryEntryAddress:
     memory: ArtifactAddress
     entry_id: str
     entry_version_id: str
+
+
+@dataclass(frozen=True)
+class PreparedContextFragment:
+    """One delivered fragment of original text and the entry version it came from.
+
+    ``text`` is exactly ``entry.text[start:end]`` of the addressed entry version: the
+    fragment is a literal slice of the source, never a rewrite or a summary.
+    """
+
+    address: MemoryEntryAddress
+    start: int
+    end: int
+    text: str
 
 
 PreparedContextOrigin = MemoryCitation | ArtifactRef | MemoryEntryAddress | ArtifactAddress
@@ -211,6 +246,16 @@ class PreparedContextBuilder:
         profile_candidates: Sequence[PreparedProfileCandidate] = (),
         code_candidates: Sequence[PreparedCodeCandidate] = (),
     ) -> PreparedContextBuild:
+        if request.evidence_selection:
+            # Evidence selection delivers literal fragments of Memory entries. It replaces the
+            # ordinary assembly of whole entries, so it does not also load Code, Topic
+            # Memory or Experience in this mode.
+            return self._build_evidence(
+                request=request,
+                current_scope_id=current_scope_id,
+                memory_candidates=memory_candidates,
+            )
+
         if request.include_code:
 
             def historical(history_request: PrepareContextRequest, entries: int) -> PreparedContextBuild:
@@ -255,6 +300,112 @@ class PreparedContextBuilder:
             origins=origins,
             omissions=omissions,
         )
+
+    def _build_evidence(
+        self,
+        *,
+        request: PrepareContextRequest,
+        current_scope_id: str | None,
+        memory_candidates: Sequence[PreparedMemoryCandidates],
+    ) -> PreparedContextBuild:
+        """Select and render literal fragments of Memory entries for one query.
+
+        The fragments are contiguous slices of the candidates' original text, so every
+        delivered item can be verified against the entry version it cites. The whole
+        output is measured against ``request.max_bytes``: the trust policy, the envelope
+        markers, the JSON, the citations and the fragment text all count.
+        """
+
+        entries = self._evidence_entries(memory_candidates, current_scope_id=current_scope_id)
+        if not entries:
+            return PreparedContextBuild(context=self.empty(), origins=())
+        by_key = {entry.key: entry for entry in entries}
+
+        def fits(spans: Sequence[EvidenceSpan]) -> bool:
+            return len(self._render_evidence(by_key, spans).encode("utf-8")) <= request.max_bytes
+
+        spans = select_evidence_spans(
+            request.query,
+            tuple(EvidenceCandidate(key=entry.key, text=entry.text) for entry in entries),
+            fits,
+        )
+        if not spans:
+            return PreparedContextBuild(context=self.empty(), origins=())
+        content = self._render_evidence(by_key, spans)
+        content_bytes = len(content.encode("utf-8"))
+        if content_bytes > request.max_bytes:
+            raise PreparedContextInvariantError("output-budget")
+        fragments = tuple(
+            PreparedContextFragment(
+                address=by_key[span.key].address,
+                start=span.start,
+                end=span.end,
+                text=span.text,
+            )
+            for span in spans
+        )
+        return PreparedContextBuild(
+            context=PreparedContext(status="ready", content=content, content_bytes=content_bytes),
+            origins=tuple(fragment.address for fragment in fragments),
+            fragments=fragments,
+        )
+
+    def _evidence_entries(
+        self,
+        candidates: Sequence[PreparedMemoryCandidates],
+        *,
+        current_scope_id: str | None,
+    ) -> tuple[_EvidenceEntry, ...]:
+        """Return the Memory entries evidence selection may cut fragments from."""
+
+        entries: list[_EvidenceEntry] = []
+        seen: set[tuple[str, str, str]] = set()
+        for group in candidates:
+            scope_id = group.scope_id or current_scope_id or ""
+            if not scope_id.strip():
+                continue
+            for hit in group.hits:
+                if not hit.entry_id.strip() or not hit.entry_version_id.strip() or not hit.text.strip():
+                    continue
+                identity = (scope_id, hit.entry_id, hit.entry_version_id)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                entries.append(
+                    _EvidenceEntry(
+                        key=f"{scope_id}:{hit.entry_id}:{hit.entry_version_id}",
+                        address=MemoryEntryAddress(
+                            memory=ArtifactAddress(scope_id=scope_id, artifact=hit.memory_ref),
+                            entry_id=hit.entry_id,
+                            entry_version_id=hit.entry_version_id,
+                        ),
+                        citation={
+                            "scope_id": scope_id,
+                            "memory_ref": hit.memory_ref.model_dump(mode="json"),
+                            "entry_id": hit.entry_id,
+                            "entry_version_id": hit.entry_version_id,
+                        },
+                        text=hit.text,
+                    )
+                )
+        return tuple(entries)
+
+    @staticmethod
+    def _render_evidence(by_key: Mapping[str, _EvidenceEntry], spans: Sequence[EvidenceSpan]) -> str:
+        """Render the delivered fragments inside the prepared-context envelope."""
+
+        items = [
+            {
+                "citation": by_key[span.key].citation,
+                "content": span.text,
+                "start": span.start,
+                "end": span.end,
+            }
+            for span in spans
+        ]
+        envelope = {"trust": "untrusted_history", "items": items}
+        encoded = json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))
+        return "\n\n".join((TRUST_POLICY, f"{_BEGIN_MARKER}\n{encoded}\n{_END_MARKER}"))
 
     def probe_budget(
         self,
