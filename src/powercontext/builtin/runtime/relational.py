@@ -152,6 +152,7 @@ from powercontext.builtin.persistence.recurrence import RecurrenceRepository
 from powercontext.builtin.persistence.skill_packages import SkillPackageRepository
 from powercontext.builtin.persistence.skill_publications import SkillPublicationRepository
 from powercontext.builtin.persistence.source_definitions import SourceDefinitionManifestRepository
+from powercontext.builtin.persistence.source_lifecycle import SourceLifecycleRepository
 from powercontext.builtin.persistence.sources import SourceRepository, StoredSource
 from powercontext.builtin.persistence.statistics import StatisticsRepository
 from powercontext.builtin.persistence.supervision import (
@@ -190,6 +191,7 @@ from powercontext.builtin.runtime.protocols import (
 )
 from powercontext.builtin.runtime.recall import RelationalRecallTokenEstimator
 from powercontext.builtin.runtime.recurrence import RelationalRecurrenceLedger
+from powercontext.builtin.runtime.source_lifecycle import SourceLifecycleService
 from powercontext.builtin.runtime.statistics import RelationalScopedStatistics
 from powercontext.builtin.scope import ScopeApplication
 from powercontext.builtin.scope.subject_sources import SubjectSourceService
@@ -284,6 +286,7 @@ class _Repositories:
     processing_leases: ArtifactProcessingLeaseRepository
     processing_binding_states: ArtifactProcessingBindingStateRepository
     topic_memories: TopicMemoryRepository
+    source_lifecycle: SourceLifecycleRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -582,6 +585,7 @@ class RelationalContexts:
             processing_leases=ArtifactProcessingLeaseRepository(),
             processing_binding_states=ArtifactProcessingBindingStateRepository(),
             topic_memories=topic_memory_repository,
+            source_lifecycle=SourceLifecycleRepository(),
         )
         self._model_usage = _ModelUsageRecorder(
             database,
@@ -920,6 +924,23 @@ class RelationalContexts:
         scope = validate_scope_id(scope_id)
         async with self.database.transaction() as connection:
             return await self.experience_index.search(connection, scope, query, limit, admission=admission)
+
+    def lifecycle(self, scope_id: str, /) -> SourceLifecycleService:
+        """Return the Source lifecycle service of one scope."""
+
+        scope = validate_scope_id(scope_id)
+        services = self._services_for(scope)
+        _, source_catalog = services.sources()
+        return SourceLifecycleService(
+            database=self.database,
+            scope_id=scope,
+            memory=lambda connection: services.memory(source_catalog, connection),
+            memory_artifact_id=self._memory_artifact_id,
+            sources=self.repositories.sources,
+            artifacts=self.repositories.artifacts,
+            lifecycle=self.repositories.source_lifecycle,
+            topic_memories=self.repositories.topic_memories,
+        )
 
     async def get_topic_memory(
         self,

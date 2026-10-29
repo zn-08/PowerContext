@@ -249,6 +249,11 @@ from powercontext.builtin.runtime.recall_sufficiency import (
     build_recall_candidates,
     recall_effort,
 )
+from powercontext.builtin.runtime.source_lifecycle import (
+    SourceLifecycleError,
+    SourceLifecycleEvent,
+    SourceLifecycleService,
+)
 from powercontext.builtin.runtime.statistics import RelationalScopedStatistics, overview_selection
 from powercontext.builtin.scope import ScopeApplication, ScopeDescriptor, ScopeSelection
 from powercontext.builtin.scope.subject_sources import SubjectSourceService
@@ -342,6 +347,7 @@ _MEMORY_SEARCH_RESULT_COUNT = "powercontext.memory.search.result_count"
 ScopeIds = Callable[[], Awaitable[tuple[str, ...]]]
 ReviewServiceFactory = Callable[[str], ReviewService]
 GenerationServiceFactory = Callable[[str], ReviewedGenerationService]
+SourceLifecycleServiceFactory = Callable[[str], SourceLifecycleService]
 ExternalSkillRegistryFactory = Callable[[str], ExternalSkillRegistryService]
 SkillPublicationServiceFactory = Callable[[str, str, str], ManagedSkillPublicationService]
 ExternalSkillImporter = Callable[
@@ -2836,6 +2842,83 @@ class TopicMemoryApplication:
         return ScopedTopicMemoryApplication(self._runtime, scope_id)
 
 
+class SourceLifecycleApplication:
+    """Select the scoped Source lifecycle application service."""
+
+    def __init__(self, runtime: BuiltinRuntime, factory: SourceLifecycleServiceFactory | None) -> None:
+        self._runtime = runtime
+        self._factory = factory
+
+    def for_scope(self, scope_id: str, /) -> ScopedSourceLifecycleService:
+        if self._factory is None:
+            raise SourceLifecycleError("unavailable")
+        return ScopedSourceLifecycleService(self._runtime, scope_id, self._factory(scope_id))
+
+
+class ScopedSourceLifecycleService:
+    """Operate one scope's evidence dependency graph and availability propagation."""
+
+    def __init__(
+        self,
+        runtime: BuiltinRuntime,
+        scope_id: str,
+        service: SourceLifecycleService,
+    ) -> None:
+        self._runtime = runtime
+        self._service = service
+        self.scope_id = validate_scope_id(scope_id)
+
+    async def register_source(
+        self,
+        node_id: str,
+        source_ref: SourceRef,
+        revision: int = 1,
+    ) -> None:
+        """Register one Source as the root of this scope's evidence graph."""
+
+        async with self._runtime._context(self.scope_id), self._runtime._locked(self.scope_id):
+            await self._service.register_source(node_id, source_ref, revision=revision)
+
+    async def register_memory(
+        self,
+        node_id: str,
+        citation: MemoryCitation,
+        parents: Sequence[str] = (),
+        policy: str = "all",
+    ) -> None:
+        """Register one Memory entry with the parents that support its body."""
+
+        async with self._runtime._context(self.scope_id), self._runtime._locked(self.scope_id):
+            await self._service.register_memory(node_id, citation, parents=parents, policy=policy)
+
+    async def register_topic(
+        self,
+        node_id: str,
+        artifact_ref: ArtifactRef,
+        parents: Sequence[str] = (),
+        policy: str = "all",
+    ) -> None:
+        """Register one Topic Memory artifact with the parents that support it."""
+
+        async with self._runtime._context(self.scope_id), self._runtime._locked(self.scope_id):
+            await self._service.register_topic(node_id, artifact_ref, parents=parents, policy=policy)
+
+    async def apply(self, event: SourceLifecycleEvent) -> list[str]:
+        """Apply one Source lifecycle event and return the available node ids."""
+
+        async with self._runtime._context(self.scope_id), self._runtime._locked(self.scope_id):
+            return await self._service.apply(event)
+
+    async def resolve(
+        self,
+        node_id: str,
+        purpose: str = "generation",
+    ) -> SourceRef | MemoryCitation | ArtifactRef:
+        """Return the exact reference of one node for the requested purpose."""
+
+        return await self._service.resolve(node_id, purpose)
+
+
 class ScheduledSourceProcessor:
     """Map APScheduler activations to scoped Source-window policies."""
 
@@ -3012,6 +3095,7 @@ class BuiltinRuntime:
         profiles: RelationalProfileService | None = None,
         subject_sources: SubjectSourceService | None = None,
         generation_service: GenerationServiceFactory | None = None,
+        lifecycle_service: SourceLifecycleServiceFactory | None = None,
         experience_recall: ExperienceRecall | None = None,
         skill_recall: SkillRecall | None = None,
         skill_lister: SkillLister | None = None,
@@ -3133,6 +3217,7 @@ class BuiltinRuntime:
         self.work = WorkApplication(self)
         self.memory = MemoryApplication(self)
         self.topic_memory = TopicMemoryApplication(self)
+        self.lifecycle = SourceLifecycleApplication(self, lifecycle_service)
         self.records = RecordApplication(self)
         self.prompts = PromptApplication(self)
         self.review = ReviewApplication(self)

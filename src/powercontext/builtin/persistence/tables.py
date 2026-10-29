@@ -51,6 +51,9 @@ from powercontext.limits import (
     MAX_SCOPE_SUMMARY_LENGTH,
     MAX_SCOPE_TITLE_LENGTH,
     MAX_SOURCE_ID_LENGTH,
+    MAX_SOURCE_LIFECYCLE_FAMILY_LENGTH,
+    MAX_SOURCE_LIFECYCLE_NODE_ID_LENGTH,
+    MAX_SOURCE_LIFECYCLE_POLICY_LENGTH,
     MAX_SOURCE_TYPE_LENGTH,
 )
 
@@ -686,6 +689,39 @@ TOPIC_MEMORY_ACTIVE_CHUNKS_TABLE = Table(
     CheckConstraint("end_offset > start_offset", name="ck_pc_topic_memory_active_chunks_offsets"),
 )
 
+TOPIC_MEMORY_INELIGIBLE_TABLE = Table(
+    "pc_topic_memory_ineligible",
+    SHARED_METADATA,
+    Column("scope_id", identity_string(MAX_SCOPE_ID_LENGTH), primary_key=True),
+    Column("artifact_id", identity_string(MAX_ARTIFACT_ID_LENGTH), primary_key=True),
+    Column("revision", Integer, nullable=False),
+    CheckConstraint("revision > 0", name="ck_pc_topic_memory_ineligible_revision_positive"),
+)
+
+
+SOURCE_LIFECYCLE_NODES_TABLE = Table(
+    "pc_source_lifecycle_nodes",
+    SHARED_METADATA,
+    Column("scope_id", identity_string(MAX_SCOPE_ID_LENGTH), primary_key=True),
+    Column("node_id", identity_string(MAX_SOURCE_LIFECYCLE_NODE_ID_LENGTH), primary_key=True),
+    Column("family", identity_string(MAX_SOURCE_LIFECYCLE_FAMILY_LENGTH), nullable=False),
+    Column("reference", _canonical_payload_type(), nullable=False),
+    Column("parents", _canonical_payload_type(), nullable=False),
+    Column("policy", identity_string(MAX_SOURCE_LIFECYCLE_POLICY_LENGTH), nullable=False),
+    Column("revision", Integer, nullable=False),
+    Column("sequence", Integer, nullable=False),
+    Column("available", Boolean, nullable=False),
+    Column("digest", identity_string(64)),
+    CheckConstraint(
+        "family IN ('source', 'memory', 'topic')",
+        name="ck_pc_source_lifecycle_nodes_family",
+    ),
+    CheckConstraint("policy IN ('all', 'any')", name="ck_pc_source_lifecycle_nodes_policy"),
+    CheckConstraint("revision >= 0", name="ck_pc_source_lifecycle_nodes_revision_nonnegative"),
+    CheckConstraint("sequence >= 0", name="ck_pc_source_lifecycle_nodes_sequence_nonnegative"),
+)
+
+
 CONNECTOR_CHECKPOINTS_TABLE = Table(
     "pc_connector_checkpoints",
     SHARED_METADATA,
@@ -1020,7 +1056,10 @@ TOPIC_MEMORY_TABLES = (
     TOPIC_MEMORY_REVISION_PUBLICATIONS_TABLE,
     TOPIC_MEMORY_ACTIVE_TOPICS_TABLE,
     TOPIC_MEMORY_ACTIVE_CHUNKS_TABLE,
+    TOPIC_MEMORY_INELIGIBLE_TABLE,
 )
+
+SOURCE_LIFECYCLE_TABLES = (SOURCE_LIFECYCLE_NODES_TABLE,)
 
 # OceanBase requires FK column lengths to match the parent. A normalized-key
 # fingerprint keeps composite indexes within 3072 bytes without narrowing any
@@ -1187,5 +1226,6 @@ BUILTIN_TABLES = (
     + MEMORY_TABLES
     + STATISTICS_TABLES
     + RECURRENCE_TABLES
+    + SOURCE_LIFECYCLE_TABLES
     + (ARTIFACT_TAGS_TABLE, DREAM_RUNS_TABLE, RECEIPT_MIGRATION_REVIEW_TABLE)
 )

@@ -607,6 +607,7 @@ async def open_builtin_runtime(
                 profiles=contexts.profiles,
                 subject_sources=contexts.subject_sources,
                 generation_service=contexts.generation,
+                lifecycle_service=contexts.lifecycle,
                 dream_service=contexts.dream(
                     dream_generator,
                     operations=configured_operations,

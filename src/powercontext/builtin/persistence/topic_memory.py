@@ -36,10 +36,12 @@ from powercontext.builtin.artifacts.topic_memory import (
     TopicMemory,
     TopicMemoryBrowseCursor,
     TopicMemoryCapabilityError,
+    TopicMemoryChannelHit,
     TopicMemoryCurrentItem,
     TopicMemoryDraft,
     TopicMemoryProjection,
     TopicMemoryProjectionError,
+    TopicMemorySearchChannels,
     TopicMemorySearchMode,
     TopicMemorySearchRequest,
     TopicMemorySearchResult,
@@ -56,6 +58,7 @@ from powercontext.builtin.persistence.tables import (
     ARTIFACTS_TABLE,
     TOPIC_MEMORY_ACTIVE_CHUNKS_TABLE,
     TOPIC_MEMORY_ACTIVE_TOPICS_TABLE,
+    TOPIC_MEMORY_INELIGIBLE_TABLE,
     TOPIC_MEMORY_RETRIEVAL_SHAPE_TABLE,
     TOPIC_MEMORY_REVISION_PUBLICATIONS_TABLE,
 )
@@ -487,6 +490,9 @@ class TopicMemoryRepository:
             admission=admission,
         )
         channels = await self.index.search(connection, scope_id, request)
+        ineligible = await self.ineligible_artifact_ids(connection, scope_id)
+        if ineligible:
+            channels = _without_ineligible(channels, ineligible)
         await self._check_retrieval_shape(connection)
         outcome = _fuse_topic_memory_rankings(query, channels, limit, mode=used_mode, admission=admission)
         return TopicMemorySearchResult(
@@ -499,6 +505,64 @@ class TopicMemoryRepository:
                 admitted=outcome.admitted,
                 rejected=outcome.rejected,
             ),
+        )
+
+    async def ineligible_artifact_ids(
+        self,
+        connection: AsyncConnection,
+        scope_id: str,
+        /,
+    ) -> frozenset[str]:
+        """Return the Topic artifacts that this scope withdrew from retrieval."""
+
+        rows = await connection.execute(
+            select(TOPIC_MEMORY_INELIGIBLE_TABLE.c.artifact_id).where(
+                TOPIC_MEMORY_INELIGIBLE_TABLE.c.scope_id == scope_id,
+            )
+        )
+        return frozenset(str(row[0]) for row in rows)
+
+    async def set_eligibility(
+        self,
+        connection: AsyncConnection,
+        scope_id: str,
+        artifact_id: str,
+        /,
+        *,
+        eligible: bool,
+        revision: int = 1,
+    ) -> None:
+        """Withdraw one Topic artifact from retrieval, or return it to retrieval.
+
+        The publication, its exact Revision, and the active projection stay
+        untouched, so an exact read still resolves the withdrawn body while
+        search and Context stop offering it.
+        """
+
+        current = await connection.scalar(
+            select(TOPIC_MEMORY_INELIGIBLE_TABLE.c.artifact_id).where(
+                TOPIC_MEMORY_INELIGIBLE_TABLE.c.scope_id == scope_id,
+                TOPIC_MEMORY_INELIGIBLE_TABLE.c.artifact_id == artifact_id,
+            )
+        )
+        if eligible:
+            if current is None:
+                return
+            await connection.execute(
+                delete(TOPIC_MEMORY_INELIGIBLE_TABLE).where(
+                    TOPIC_MEMORY_INELIGIBLE_TABLE.c.scope_id == scope_id,
+                    TOPIC_MEMORY_INELIGIBLE_TABLE.c.artifact_id == artifact_id,
+                )
+            )
+            return
+        if current is not None:
+            return
+        await connection.execute(
+            insert(TOPIC_MEMORY_INELIGIBLE_TABLE).values(
+                scope_id=scope_id,
+                artifact_id=artifact_id,
+                revision=revision,
+            )
         )
 
     async def _activate(
@@ -767,6 +831,31 @@ class TopicMemoryRepository:
             )
         except ValueError:
             raise TopicMemoryCapabilityError("embedding-vector", "query vector is invalid") from None
+
+
+def _without_ineligible(
+    channels: TopicMemorySearchChannels,
+    ineligible: frozenset[str],
+) -> TopicMemorySearchChannels:
+    """Drop the channel hits of Topic artifacts this scope withdrew."""
+
+    def keep(hit: TopicMemoryChannelHit) -> bool:
+        return hit.artifact_ref.artifact_id not in ineligible
+
+    return TopicMemorySearchChannels(
+        topic_fts=tuple(hit for hit in channels.topic_fts if keep(hit)),
+        topic_vector=tuple(hit for hit in channels.topic_vector if keep(hit)),
+        detail_fts=tuple(hit for hit in channels.detail_fts if keep(hit)),
+        detail_vector=tuple(hit for hit in channels.detail_vector if keep(hit)),
+        topic_fts_retrieved=channels.topic_fts_retrieved,
+        topic_vector_retrieved=channels.topic_vector_retrieved,
+        detail_fts_retrieved=channels.detail_fts_retrieved,
+        detail_vector_retrieved=channels.detail_vector_retrieved,
+        topic_fts_eligible=channels.topic_fts_eligible,
+        topic_vector_eligible=channels.topic_vector_eligible,
+        detail_fts_eligible=channels.detail_fts_eligible,
+        detail_vector_eligible=channels.detail_vector_eligible,
+    )
 
 
 def _aware_utc(value: object) -> datetime:
