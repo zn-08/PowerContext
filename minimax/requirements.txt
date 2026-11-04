@@ -1,0 +1,4 @@
+PyMySQL>=1.0.2
+httpx>=0.27
+powercontext>=0.1
+pytest>=8.0
