@@ -1,0 +1,311 @@
+app:
+  description: 会把你过去的恶作剧一条条记下来的酒馆掌柜 NPC。seekdb 负责记忆与世界设定，Dify 负责编排与台词生成。
+  icon: 🦞
+  icon_background: '#E4FBCC'
+  mode: advanced-chat
+  name: 记得你所有恶作剧的掌柜
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.1.5
+workflow:
+  conversation_variables: []
+  environment_variables:
+  - description: 记忆服务的基地址，导入后请改成你自己的地址
+    id: SERVICE_BASE_URL
+    name: SERVICE_BASE_URL
+    selector:
+    - env
+    - SERVICE_BASE_URL
+    value: http://127.0.0.1:8808
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: 我是这家酒馆的掌柜。你之前干过什么，我全都记着。说吧，这次又做了什么？
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions:
+    - 我上次藏了什么东西？
+    - 这家店有什么规矩？
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        sourceType: start
+        targetType: http-request
+      id: start-source-ctx-target
+      source: start
+      sourceHandle: source
+      target: ctx
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: http-request
+        targetType: llm
+      id: ctx-source-llm-target
+      source: ctx
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: http-request
+      id: llm-source-mem-target
+      source: llm
+      sourceHandle: source
+      target: mem
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: http-request
+        targetType: answer
+      id: mem-source-answer-target
+      source: mem
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: 玩家标识与这一轮说的话
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - label: 玩家标识
+          max_length: 64
+          options: []
+          required: true
+          type: text-input
+          variable: session_id
+        - label: 玩家这次说了什么
+          max_length: 2000
+          options: []
+          required: true
+          type: paragraph
+          variable: player_input
+      height: 122
+      id: start
+      position:
+        x: 80
+        y: 280
+      positionAbsolute:
+        x: 80
+        y: 280
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data: []
+          type: none
+        desc: 向记忆服务取回这个玩家的过往记忆，并用全文索引检索相关设定
+        headers: ''
+        method: get
+        params: 'session={{#start.session_id#}}&query={{#start.player_input#}}'
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 100
+        selected: false
+        timeout:
+          max_connect_timeout: 0
+          max_read_timeout: 0
+          max_write_timeout: 0
+        title: 读取记忆与设定
+        type: http-request
+        url: '{{#env.SERVICE_BASE_URL#}}/context'
+        variables: []
+      height: 136
+      id: ctx
+      position:
+        x: 380
+        y: 280
+      positionAbsolute:
+        x: 380
+        y: 280
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 结合记忆与设定生成掌柜的回应
+        memory:
+          query_prompt_template: '{{#ctx.body#}}'
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 10
+        model:
+          completion_params:
+            temperature: 0.8
+          mode: chat
+          name: gpt-4o-mini
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: sys-1
+          role: system
+          text: |
+            你是「歪脖子酒馆」的掌柜，一个记得住每一个客人恶作剧的老狐狸。
+
+            规则：
+            1. 你只能依据下面这份资料说话，不能编造资料里没有的设定。
+            2. `memory` 是这个玩家过去的对话记录；`lore` 是用全文索引从世界设定表里检索出来的条目。
+            3. 如果玩家的行为违反了 `lore` 里的规矩，你要用掌柜的口吻点破它，并引用对应的设定条目。
+            4. 如果玩家重复了以前干过的事，你要明确指出账本上已经记着，不许重复。
+            5. 每次回话控制在 120 字以内，语气要有市井气，可以有点促狭，但不要脏话。
+            6. 最后用一行 `账本:` 开头记录这一轮玩家的行为摘要。
+        - id: usr-1
+          role: user
+          text: |
+            玩家这次说了：{{#start.player_input#}}
+
+            记忆服务返回的资料：
+            {{#ctx.body#}}
+        selected: false
+        title: 掌柜
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 96
+      id: llm
+      position:
+        x: 680
+        y: 280
+      positionAbsolute:
+        x: 680
+        y: 280
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data:
+          - id: body-session
+            key: session_id
+            type: text
+            value: '{{#start.session_id#}}'
+          - id: body-player
+            key: player_input
+            type: text
+            value: '{{#start.player_input#}}'
+          - id: body-reply
+            key: npc_reply
+            type: text
+            value: '{{#llm.text#}}'
+          type: json
+        desc: 把这一轮写回 seekdb 的记忆表
+        headers: 'Content-Type:application/json'
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 100
+        selected: false
+        timeout:
+          max_connect_timeout: 0
+          max_read_timeout: 0
+          max_write_timeout: 0
+        title: 写回记忆
+        type: http-request
+        url: '{{#env.SERVICE_BASE_URL#}}/memory'
+        variables: []
+      height: 136
+      id: mem
+      position:
+        x: 980
+        y: 280
+      positionAbsolute:
+        x: 980
+        y: 280
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#llm.text#}}'
+        desc: ''
+        selected: false
+        title: 回答
+        type: answer
+        variables: []
+      height: 105
+      id: answer
+      position:
+        x: 1280
+        y: 280
+      positionAbsolute:
+        x: 1280
+        y: 280
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.75
