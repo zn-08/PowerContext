@@ -1,0 +1,152 @@
+diff --git a/minimax/taskboard/cli.py b/minimax/taskboard/cli.py
+index 70cb760f..cde153c8 100644
+--- a/minimax/taskboard/cli.py
++++ b/minimax/taskboard/cli.py
+@@ -18,6 +18,12 @@ def build_parser() -> argparse.ArgumentParser:
+     list_parser.add_argument("--board", default=None, help="Path of the board JSON file.")
+     list_parser.add_argument("--status", choices=[str(status) for status in TaskStatus], default=None)
+     list_parser.add_argument("--assignee", default=None)
++    list_parser.add_argument(
++        "--label",
++        action="append",
++        default=[],
++        help="Only list the tasks carrying this label; repeat for several labels.",
++    )
+     list_parser.add_argument("--json", action="store_true", help="Write the tasks as JSON.")
+ 
+     summary_parser = subparsers.add_parser("summary", help="Count the tasks per status.")
+@@ -39,8 +45,12 @@ def main(argv: list[str] | None = None) -> int:
+     try:
+         store = _load_board(args.board)
+         if args.command == "list":
+-            tasks = filter_tasks(store.list(), status=TaskStatus(args.status) if args.status else None,
+-                                 assignee=args.assignee)
++            tasks = filter_tasks(
++                store.list(),
++                status=TaskStatus(args.status) if args.status else None,
++                assignee=args.assignee,
++                labels=args.label or None,
++            )
+             if args.json:
+                 print(
+                     json.dumps(
+diff --git a/minimax/taskboard/filters.py b/minimax/taskboard/filters.py
+index 03054217..5b1a578e 100644
+--- a/minimax/taskboard/filters.py
++++ b/minimax/taskboard/filters.py
+@@ -12,10 +12,15 @@ def filter_tasks(
+     *,
+     status: TaskStatus | None = None,
+     assignee: str | None = None,
++    labels: Sequence[str] | None = None,
+ ) -> list[Task]:
+     """Return the tasks that match every given condition.
+ 
+-    A condition that is not given does not narrow the result.
++    A condition that is not given does not narrow the result.  Several labels
++    are an "or": a task matches when it carries any of them.  Labels are
++    compared the way :meth:`Task.has_label` compares them, so the case and the
++    padding of a label do not matter.  A label that is blank carries no
++    condition and is ignored.
+     """
+ 
+     selected = list(tasks)
+@@ -23,6 +28,10 @@ def filter_tasks(
+         selected = [task for task in selected if task.status == status]
+     if assignee is not None:
+         selected = [task for task in selected if task.assignee == assignee]
++    if labels:
++        wanted = {label.strip().lower() for label in labels if label.strip()}
++        if wanted:
++            selected = [task for task in selected if wanted.intersection(task.labels)]
+     return selected
+ 
+ 
+diff --git a/minimax/tests/test_filters.py b/minimax/tests/test_filters.py
+new file mode 100644
+index 00000000..c9643171
+--- /dev/null
++++ b/minimax/tests/test_filters.py
+@@ -0,0 +1,82 @@
++"""Target tests for the label filter of the task board.
++
++Specification: ``minimax/specs/SPEC-TASKBOARD-LABEL-FILTER.md``.
++
++Before the change these tests fail because ``filter_tasks`` does not accept a
++``labels`` condition at all.  After the change every test in this file passes.
++The regression suite (``test_store.py``, ``test_cli.py``) passes in both states.
++"""
++
++from __future__ import annotations
++
++import json
++
++from taskboard.cli import main
++from taskboard.filters import filter_tasks
++from taskboard.model import Task, TaskStatus
++
++
++def _tasks() -> list[Task]:
++    return [
++        Task(id="T-1", title="Write the spec", status=TaskStatus.TODO, labels=("docs",)),
++        Task(id="T-2", title="Implement the filter", status=TaskStatus.IN_PROGRESS, labels=("backend", "api")),
++        Task(id="T-3", title="Release", status=TaskStatus.DONE, labels=("release",)),
++    ]
++
++
++def test_filter_tasks_selects_the_tasks_carrying_one_label() -> None:
++    selected = filter_tasks(_tasks(), labels=["backend"])
++    assert [task.id for task in selected] == ["T-2"]
++
++
++def test_filter_tasks_matches_any_of_the_given_labels() -> None:
++    selected = filter_tasks(_tasks(), labels=["backend", "release"])
++    assert [task.id for task in selected] == ["T-2", "T-3"]
++
++
++def test_filter_tasks_matches_a_task_carrying_several_labels() -> None:
++    selected = filter_tasks(_tasks(), labels=["api"])
++    assert [task.id for task in selected] == ["T-2"]
++
++
++def test_filter_tasks_without_a_label_condition_keeps_every_task() -> None:
++    assert [task.id for task in filter_tasks(_tasks())] == ["T-1", "T-2", "T-3"]
++
++
++def test_filter_tasks_combines_the_label_and_the_status_condition() -> None:
++    selected = filter_tasks(_tasks(), labels=["backend"], status=TaskStatus.IN_PROGRESS)
++    assert [task.id for task in selected] == ["T-2"]
++
++
++def test_filter_tasks_with_a_label_no_task_carries_returns_nothing() -> None:
++    assert filter_tasks(_tasks(), labels=["frontend"]) == []
++
++
++def test_filter_tasks_ignores_the_case_and_the_padding_of_a_label() -> None:
++    selected = filter_tasks(_tasks(), labels=[" BACKEND "])
++    assert [task.id for task in selected] == ["T-2"]
++
++
++def test_the_command_line_lists_the_tasks_carrying_one_label(tmp_path, capsys) -> None:
++    from taskboard.store import TaskStore
++
++    store = TaskStore(_tasks())
++    board = tmp_path / "board.json"
++    store.save(board)
++
++    assert main(["list", "--board", str(board), "--label", "backend"]) == 0
++    printed = capsys.readouterr().out
++    assert "T-2" in printed
++    assert "T-1" not in printed
++
++
++def test_the_command_line_accepts_several_labels(tmp_path, capsys) -> None:
++    from taskboard.store import TaskStore
++
++    store = TaskStore(_tasks())
++    board = tmp_path / "board.json"
++    store.save(board)
++
++    assert main(["list", "--board", str(board), "--label", "backend", "--label", "release", "--json"]) == 0
++    payload = json.loads(capsys.readouterr().out)
++    assert [entry["id"] for entry in payload] == ["T-2", "T-3"]

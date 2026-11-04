@@ -37,11 +37,14 @@ def _run(arguments: list[str]) -> subprocess.CompletedProcess[str]:
     environment = dict(os.environ)
     existing = environment.get("PYTHONPATH")
     environment["PYTHONPATH"] = f"{MODULE_ROOT}{os.pathsep}{existing}" if existing else str(MODULE_ROOT)
+    # The child writes UTF-8, so the parent can read it on any platform.
+    environment["PYTHONIOENCODING"] = "utf-8"
     return subprocess.run(
         [sys.executable, "-m", "minimax_ctx", *arguments],
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
         env=environment,
         cwd=str(MODULE_ROOT),
     )

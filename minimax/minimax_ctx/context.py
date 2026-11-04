@@ -60,10 +60,12 @@ class ContextPack:
         return paths
 
     def digest(self) -> str:
-        payload = json.dumps(self.to_dict(), ensure_ascii=False, sort_keys=True).encode("utf-8")
+        """Return a stable fingerprint of the pack content."""
+
+        payload = json.dumps(self._payload(), ensure_ascii=False, sort_keys=True).encode("utf-8")
         return hashlib.sha256(payload).hexdigest()
 
-    def to_dict(self) -> dict[str, Any]:
+    def _payload(self) -> dict[str, Any]:
         return {
             "task": self.task,
             "query": self.query,
@@ -82,6 +84,11 @@ class ContextPack:
             },
             "sources": self.sources,
         }
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = self._payload()
+        payload["context_digest"] = self.digest()
+        return payload
 
     def to_markdown(self) -> str:
         lines: list[str] = []

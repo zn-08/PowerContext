@@ -1,0 +1,151 @@
+BEFORE the change -- the target test against the baseline commit.
+The baseline tree does not have the label filter, so the target test fails
+because the behaviour is missing, not because the environment is broken.
+
+timestamp : 2026-11-04 23:07:38 +0800
+command   : python.exe -m pytest tests/test_filters.py -q
+working   : D:\A_BIT\学习\大三上\Occeanbase高级数据库技术\比赛\work\wt-minimax-before
+exit code : 1
+
+------------------------------------------------------------------------
+
+FFF.FFFFF                                                                [100%]
+================================== FAILURES ===================================
+___________ test_filter_tasks_selects_the_tasks_carrying_one_label ____________
+
+    def test_filter_tasks_selects_the_tasks_carrying_one_label() -> None:
+>       selected = filter_tasks(_tasks(), labels=["backend"])
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: filter_tasks() got an unexpected keyword argument 'labels'
+
+tests\test_filters.py:28: TypeError
+______________ test_filter_tasks_matches_any_of_the_given_labels ______________
+
+    def test_filter_tasks_matches_any_of_the_given_labels() -> None:
+>       selected = filter_tasks(_tasks(), labels=["backend", "release"])
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: filter_tasks() got an unexpected keyword argument 'labels'
+
+tests\test_filters.py:33: TypeError
+__________ test_filter_tasks_matches_a_task_carrying_several_labels ___________
+
+    def test_filter_tasks_matches_a_task_carrying_several_labels() -> None:
+>       selected = filter_tasks(_tasks(), labels=["api"])
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: filter_tasks() got an unexpected keyword argument 'labels'
+
+tests\test_filters.py:38: TypeError
+________ test_filter_tasks_combines_the_label_and_the_status_condition ________
+
+    def test_filter_tasks_combines_the_label_and_the_status_condition() -> None:
+>       selected = filter_tasks(_tasks(), labels=["backend"], status=TaskStatus.IN_PROGRESS)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: filter_tasks() got an unexpected keyword argument 'labels'
+
+tests\test_filters.py:47: TypeError
+_______ test_filter_tasks_with_a_label_no_task_carries_returns_nothing ________
+
+    def test_filter_tasks_with_a_label_no_task_carries_returns_nothing() -> None:
+>       assert filter_tasks(_tasks(), labels=["frontend"]) == []
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: filter_tasks() got an unexpected keyword argument 'labels'
+
+tests\test_filters.py:52: TypeError
+________ test_filter_tasks_ignores_the_case_and_the_padding_of_a_label ________
+
+    def test_filter_tasks_ignores_the_case_and_the_padding_of_a_label() -> None:
+>       selected = filter_tasks(_tasks(), labels=[" BACKEND "])
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: filter_tasks() got an unexpected keyword argument 'labels'
+
+tests\test_filters.py:56: TypeError
+__________ test_the_command_line_lists_the_tasks_carrying_one_label ___________
+
+tmp_path = WindowsPath('C:/Users/lucyl/AppData/Local/Temp/pytest-of-lucyl/pytest-113/test_the_command_line_lists_th0')
+capsys = <_pytest.capture.CaptureFixture object at 0x000002B6B72BC860>
+
+    def test_the_command_line_lists_the_tasks_carrying_one_label(tmp_path, capsys) -> None:
+        from taskboard.store import TaskStore
+    
+        store = TaskStore(_tasks())
+        board = tmp_path / "board.json"
+        store.save(board)
+    
+>       assert main(["list", "--board", str(board), "--label", "backend"]) == 0
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_filters.py:67: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+taskboard\cli.py:38: in main
+    args = parser.parse_args(argv)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\lucyl\AppData\Local\Programs\Python\Python312\Lib\argparse.py:1900: in parse_args
+    self.error(msg)
+C:\Users\lucyl\AppData\Local\Programs\Python\Python312\Lib\argparse.py:2671: in error
+    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = ArgumentParser(prog='taskboard', usage=None, description='Manage one task board.', formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+status = 2
+message = 'taskboard: error: unrecognized arguments: --label backend\n'
+
+    def exit(self, status=0, message=None):
+        if message:
+            self._print_message(message, _sys.stderr)
+>       _sys.exit(status)
+E       SystemExit: 2
+
+C:\Users\lucyl\AppData\Local\Programs\Python\Python312\Lib\argparse.py:2658: SystemExit
+---------------------------- Captured stderr call -----------------------------
+usage: taskboard [-h] {list,summary} ...
+taskboard: error: unrecognized arguments: --label backend
+________________ test_the_command_line_accepts_several_labels _________________
+
+tmp_path = WindowsPath('C:/Users/lucyl/AppData/Local/Temp/pytest-of-lucyl/pytest-113/test_the_command_line_accepts_0')
+capsys = <_pytest.capture.CaptureFixture object at 0x000002B6B7B197F0>
+
+    def test_the_command_line_accepts_several_labels(tmp_path, capsys) -> None:
+        from taskboard.store import TaskStore
+    
+        store = TaskStore(_tasks())
+        board = tmp_path / "board.json"
+        store.save(board)
+    
+>       assert main(["list", "--board", str(board), "--label", "backend", "--label", "release", "--json"]) == 0
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_filters.py:80: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+taskboard\cli.py:38: in main
+    args = parser.parse_args(argv)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\lucyl\AppData\Local\Programs\Python\Python312\Lib\argparse.py:1900: in parse_args
+    self.error(msg)
+C:\Users\lucyl\AppData\Local\Programs\Python\Python312\Lib\argparse.py:2671: in error
+    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = ArgumentParser(prog='taskboard', usage=None, description='Manage one task board.', formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+status = 2
+message = 'taskboard: error: unrecognized arguments: --label backend --label release\n'
+
+    def exit(self, status=0, message=None):
+        if message:
+            self._print_message(message, _sys.stderr)
+>       _sys.exit(status)
+E       SystemExit: 2
+
+C:\Users\lucyl\AppData\Local\Programs\Python\Python312\Lib\argparse.py:2658: SystemExit
+---------------------------- Captured stderr call -----------------------------
+usage: taskboard [-h] {list,summary} ...
+taskboard: error: unrecognized arguments: --label backend --label release
+=========================== short test summary info ===========================
+FAILED tests/test_filters.py::test_filter_tasks_selects_the_tasks_carrying_one_label
+FAILED tests/test_filters.py::test_filter_tasks_matches_any_of_the_given_labels
+FAILED tests/test_filters.py::test_filter_tasks_matches_a_task_carrying_several_labels
+FAILED tests/test_filters.py::test_filter_tasks_combines_the_label_and_the_status_condition
+FAILED tests/test_filters.py::test_filter_tasks_with_a_label_no_task_carries_returns_nothing
+FAILED tests/test_filters.py::test_filter_tasks_ignores_the_case_and_the_padding_of_a_label
+FAILED tests/test_filters.py::test_the_command_line_lists_the_tasks_carrying_one_label
+FAILED tests/test_filters.py::test_the_command_line_accepts_several_labels - ...
+8 failed, 1 passed in 0.16s
