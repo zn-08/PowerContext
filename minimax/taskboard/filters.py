@@ -12,10 +12,15 @@ def filter_tasks(
     *,
     status: TaskStatus | None = None,
     assignee: str | None = None,
+    labels: Sequence[str] | None = None,
 ) -> list[Task]:
     """Return the tasks that match every given condition.
 
-    A condition that is not given does not narrow the result.
+    A condition that is not given does not narrow the result.  Several labels
+    are an "or": a task matches when it carries any of them.  Labels are
+    compared the way :meth:`Task.has_label` compares them, so the case and the
+    padding of a label do not matter.  A label that is blank carries no
+    condition and is ignored.
     """
 
     selected = list(tasks)
@@ -23,6 +28,10 @@ def filter_tasks(
         selected = [task for task in selected if task.status == status]
     if assignee is not None:
         selected = [task for task in selected if task.assignee == assignee]
+    if labels:
+        wanted = {label.strip().lower() for label in labels if label.strip()}
+        if wanted:
+            selected = [task for task in selected if wanted.intersection(task.labels)]
     return selected
 
 

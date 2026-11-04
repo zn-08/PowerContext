@@ -18,6 +18,12 @@ def build_parser() -> argparse.ArgumentParser:
     list_parser.add_argument("--board", default=None, help="Path of the board JSON file.")
     list_parser.add_argument("--status", choices=[str(status) for status in TaskStatus], default=None)
     list_parser.add_argument("--assignee", default=None)
+    list_parser.add_argument(
+        "--label",
+        action="append",
+        default=[],
+        help="Only list the tasks carrying this label; repeat for several labels.",
+    )
     list_parser.add_argument("--json", action="store_true", help="Write the tasks as JSON.")
 
     summary_parser = subparsers.add_parser("summary", help="Count the tasks per status.")
@@ -39,8 +45,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         store = _load_board(args.board)
         if args.command == "list":
-            tasks = filter_tasks(store.list(), status=TaskStatus(args.status) if args.status else None,
-                                 assignee=args.assignee)
+            tasks = filter_tasks(
+                store.list(),
+                status=TaskStatus(args.status) if args.status else None,
+                assignee=args.assignee,
+                labels=args.label or None,
+            )
             if args.json:
                 print(
                     json.dumps(
