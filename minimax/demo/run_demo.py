@@ -127,6 +127,29 @@ def main() -> int:
         print("the reloaded state carries no progress", file=sys.stderr)
         return 1
 
+    print("\n== 5b. the state is used again for the context ==")
+    resumed = _run(
+        [
+            "context",
+            "--task",
+            arguments.task,
+            "--with-state",
+            "--markdown",
+            str(EVIDENCE_DIR / "context-pack-resumed.md"),
+            "--json",
+            str(EVIDENCE_DIR / "context-pack-resumed.json"),
+        ]
+    )
+    print(resumed.stdout.strip() or resumed.stderr.strip())
+    if resumed.returncode != 0:
+        print("the context could not be built with the saved state", file=sys.stderr)
+        return 1
+    resumed_pack = json.loads((EVIDENCE_DIR / "context-pack-resumed.json").read_text(encoding="utf-8"))
+    report["resumed_state"] = resumed_pack["state"]
+    if not resumed_pack.get("state") or not resumed_pack["state"].get("done"):
+        print("the context pack does not carry the saved progress", file=sys.stderr)
+        return 1
+
     if not arguments.skip_tests:
         print("\n== 6. run the target test and the regression suite ==")
         target = subprocess.run(
