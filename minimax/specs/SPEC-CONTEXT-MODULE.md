@@ -21,7 +21,7 @@
 | --- | --- | --- |
 | seekdb | 存储工程资料（规格、代码、测试）与全文索引；检索结果用于构造任务上下文 | MySQL 协议（PyMySQL）直连 seekdb 服务端 |
 | PowerContext | 保存任务进展与验证结果，并在后续运行中读取、使用 | 官方 Python SDK `powercontext.client` → PowerContext Server 的 HTTP API |
-| MiniMax | 参与本次任务的代码生成或修改 | MiniMax Chat Completion API（可选）+ 本次开发会话记录 |
+| MiniMax | 参与本次任务的代码生成或修改 | MiniMax Chat Completion API（可选）+ 本次开发会话记录 + 真实调用记录 |
 
 ## 3. 规格条目
 
@@ -35,6 +35,7 @@
 | M-6 | 从空状态开始保存后，重启模块进程仍能读到该状态，并可与上下文包合并输出（第 4 节“已完成、待办、已有验证结果”）。 |
 | M-7 | 规格更新并重新 `import` 后，`context` 的输出必须使用更新后的内容，不得返回固定答案。 |
 | M-8 | 模块自身不保存凭据：seekdb 口令、MiniMax 密钥、PowerContext 令牌一律来自环境变量或占位值。 |
+| M-9 | `ask` 用 `context` 检索到的上下文（规格条目、代码、测试的正文）组装 prompt，调用 MiniMax Chat Completion API，并把请求、回答、用量与上下文指纹写入 JSON Lines 记录；记录中不含任何凭据。 |
 
 ## 4. 必须保持的行为
 

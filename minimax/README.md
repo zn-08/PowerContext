@@ -20,7 +20,7 @@
 | --- | --- | --- |
 | seekdb | 存储工程资料（规格 / 代码 / 测试）并建立全文索引；检索结果直接构成任务上下文 | MySQL 协议，PyMySQL >= 1.0.2，seekdb v1.3.0.0（Linux 评审环境请用 seekdb v1.4.0） |
 | PowerContext | 保存任务进展（阶段、已完成、待办、已有验证结果），并在后续运行中读取、使用 | 官方 Python SDK `powercontext.client` → PowerContext Server HTTP API `/v1/memory/*`；Server 使用 SQLite 持久化 |
-| MiniMax | 参与本次任务的代码生成与修改 | 本次开发会话（见 `docs/dev-session.md`）；`minimax_ctx/minimax_client.py` 另提供 MiniMax Chat Completion API 的可复现调用路径 |
+| MiniMax | 参与本次任务的代码生成与修改 | 本次开发会话（见 `docs/dev-session.md`）；`minimax_ctx/ask.py` 用检索到的上下文发起一次真实调用，记录在 `docs/evidence/minimax-api-log.jsonl` |
 
 **上下文是怎么选出来的**
 
@@ -103,6 +103,11 @@ python -m minimax_ctx load-state --task "..."
 python -m minimax_ctx list-state
 python -m minimax_ctx health
 python -m minimax_ctx selftest
+
+# 用检索到的上下文问一次 MiniMax（需要 MINIMAX_API_KEY）
+python -m minimax_ctx ask --task "为任务看板增加按标签筛选任务的能力" \
+    --answer-file docs/evidence/minimax-answer.md
+python scripts/export_api_log.py logs/minimax-api-log.jsonl docs/evidence/minimax-api-log.jsonl
 ```
 
 ### 3.5 测试
@@ -128,17 +133,17 @@ python -m pytest tests -q          # 目标测试 + 回归测试
 
 | 路径 | 内容 |
 | --- | --- |
-| `minimax_ctx/` | 上下文模块（CLI + 存储层 + 状态层 + 上下文组装） |
+| `minimax_ctx/` | 上下文模块（CLI + 存储层 + 状态层 + 上下文组装 + MiniMax 调用） |
 | `taskboard/` | 业务工程：任务看板（模型 / 存储 / 筛选 / 命令行） |
 | `specs/` | SDD 规格 |
 | `tests/` | 目标测试与回归测试 |
 | `demo/run_demo.py` | 验证样例 |
-| `scripts/` | 启动脚本与「改动前失败」复现脚本 |
+| `scripts/` | 启动脚本、调用记录导出脚本与「改动前失败」复现脚本 |
 | `docs/dev-session.md` | MiniMax 开发记录：任务、上下文、修改过程、代码差异 |
 | `docs/technical-note.md` | 一页技术说明 |
 | `docs/test-logs/` | 改动前 / 改动后 / 回归测试日志 |
 | `docs/diffs/` | 修改前后的代码差异 |
-| `docs/evidence/` | 演示产物：上下文包、测试输出、演示报告 |
+| `docs/evidence/` | 演示产物：上下文包、测试输出、演示报告、MiniMax 调用记录与回答 |
 | `materials.manifest.json` | 导入清单：哪些文件是规格、代码、测试 |
 
 ## 5. 验收项对照
@@ -146,7 +151,7 @@ python -m pytest tests -q          # 目标测试 + 回归测试
 | 验收项 | 交付位置 |
 | --- | --- |
 | 能够运行 | `README.md` 第 3 节 + `demo/run_demo.py`；`scripts/` 提供两个服务的启动脚本 |
-| MiniMax 实际参与 | `docs/dev-session.md`：任务、提供给模型的上下文、修改过程、代码差异；`minimax_ctx/minimax_client.py` 提供可复现的 API 调用路径 |
+| MiniMax 实际参与 | `docs/dev-session.md`：任务、提供给模型的上下文、修改过程、代码差异；`docs/evidence/minimax-api-log.jsonl`：一次真实 API 调用的完整请求与回答；`docs/evidence/minimax-answer.md`：模型回答全文 |
 | 上下文正确 | `minimax_ctx/context.py` 的上下文包（带真实来源）；`docs/evidence/context-pack.md`；规格更新后重新 `import` 即生效 |
 | 数据库实际参与 | `minimax_ctx/materials.py`：在 seekdb 中建表、建全文索引、写入并检索；每次请求都打印实际 SQL |
 | 状态能够复用 | `minimax_ctx/powercontext_state.py`：通过 PowerContext Memory 保存与读取；演示中由**新进程**读回 |
@@ -161,5 +166,6 @@ python -m pytest tests -q          # 目标测试 + 回归测试
 - 上下文检索是**关键词 + 全文索引**方案，不做语义召回；扩展查询的词来自规格条目，
   规格写得越具体，检索越准。
 - 模块不保存任何凭据：seekdb 口令、MiniMax 密钥、PowerContext 令牌一律来自环境变量。
-- `minimax_client.py` 的 MiniMax API 路径是可选的：未配置 `MINIMAX_API_KEY` 时
-  不会调用模型，样例仍然可以完整跑完（开发记录本身即是参与证据）。
+- `minimax_ctx/ask.py` 的 API 路径需要 `MINIMAX_API_KEY`：未配置密钥时不会调用模型，
+  其余流程照常可用；已生成的调用记录里不含任何凭据（`scripts/export_api_log.py`
+  在写入证据文件前会检查记录中不含凭据标记）。

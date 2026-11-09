@@ -1,0 +1,16 @@
+FULL SUITE -- the whole test set of the delivered state.
+
+timestamp : 2026-11-09 15:57:42 +0800
+command   : python.exe -m pytest tests -q
+working   : D:\A_BIT\学习\大三上\Occeanbase高级数据库技术\比赛\work\eco
+exit code : 0
+
+covers    : tests/test_filters.py   9  (the target test of the change)
+            tests/test_store.py    13  (regression)
+            tests/test_cli.py       6  (regression)
+            tests/test_ask.py       6  (the context-to-prompt bridge)
+
+------------------------------------------------------------------------
+
+..................................                                       [100%]
+34 passed in 0.17s

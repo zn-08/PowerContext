@@ -54,7 +54,7 @@ class Settings:
 
     minimax_api_key: str = field(default_factory=lambda: _env("MINIMAX_API_KEY", ""))
     minimax_base_url: str = field(default_factory=lambda: _env("MINIMAX_BASE_URL", "https://api.minimaxi.com/v1"))
-    minimax_model: str = field(default_factory=lambda: _env("MINIMAX_MODEL", "MiniMax-M2"))
+    minimax_model: str = field(default_factory=lambda: _env("MINIMAX_MODEL", "MiniMax-M3.1-Flash"))
 
     workspace: Path = field(default_factory=lambda: Path(_env("MINIMAX_WORKSPACE", ".")).resolve())
     log_sql: bool = field(default_factory=lambda: _env_bool("MINIMAX_LOG_SQL", True))

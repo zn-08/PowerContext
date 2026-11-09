@@ -36,6 +36,7 @@ class MiniMaxResult:
     answer: str
     usage: dict[str, Any]
     log_path: str
+    finish_reason: str = ""
 
 
 class MiniMaxClient:
@@ -43,7 +44,7 @@ class MiniMaxClient:
 
     def __init__(self, settings: Settings, *, log_dir: Path | None = None) -> None:
         self._settings = settings
-        self._log_dir = log_dir or (settings.workspace / "logs")
+        self._log_dir = log_dir or default_log_dir()
 
     @property
     def available(self) -> bool:
@@ -52,7 +53,14 @@ class MiniMaxClient:
     def _endpoint(self) -> str:
         return f"{self._settings.minimax_base_url.rstrip('/')}/chat/completions"
 
-    def complete(self, prompt: str, *, system: str = "", max_tokens: int = 4096) -> MiniMaxResult:
+    def complete(
+        self,
+        prompt: str,
+        *,
+        system: str = "",
+        max_tokens: int = 4096,
+        metadata: dict[str, Any] | None = None,
+    ) -> MiniMaxResult:
         """Send one prompt to MiniMax and record the exchange."""
 
         if not self.available:
@@ -92,15 +100,18 @@ class MiniMaxClient:
                     "messages": messages,
                     "error": f"HTTP {error.code}: {body[:2000]}",
                     "elapsed_sec": round(time.time() - started, 3),
+                    "metadata": metadata or {},
                 }
             )
             raise
 
         data = json.loads(raw)
         answer = ""
+        finish_reason = ""
         choices = data.get("choices") or []
         if choices:
             answer = (choices[0].get("message") or {}).get("content") or ""
+            finish_reason = str(choices[0].get("finish_reason") or "")
         usage = data.get("usage") or {}
         record = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -109,7 +120,9 @@ class MiniMaxClient:
             "messages": messages,
             "answer": answer,
             "usage": usage,
+            "finish_reason": finish_reason,
             "elapsed_sec": round(time.time() - started, 3),
+            "metadata": metadata or {},
         }
         log_path = self._append_log(record)
         return MiniMaxResult(
@@ -118,6 +131,7 @@ class MiniMaxClient:
             answer=answer,
             usage=usage,
             log_path=str(log_path),
+            finish_reason=finish_reason,
         )
 
     def _append_log(self, record: dict[str, Any]) -> Path:

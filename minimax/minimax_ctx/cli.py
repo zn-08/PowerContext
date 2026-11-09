@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from minimax_ctx.ask import DEFAULT_INSTRUCTION, ask, write_answer
 from minimax_ctx.config import Settings
 from minimax_ctx.context import build_context
 from minimax_ctx.importer import MANIFEST_NAME, Manifest, collect_materials, find_repo_root
@@ -172,6 +173,29 @@ def command_list_state(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_ask(args: argparse.Namespace) -> int:
+    """Ask MiniMax with the context that seekdb retrieved for the task."""
+
+    settings = Settings()
+    store = MaterialStore(settings)
+    pack = build_context(store, task=args.task)
+    log_dir = Path(args.log_dir).resolve() if args.log_dir else None
+    outcome = ask(
+        settings,
+        store,
+        pack,
+        args.instruction,
+        log_dir=log_dir,
+        max_tokens=args.max_tokens,
+    )
+    if args.answer_file:
+        written = write_answer(Path(args.answer_file), outcome)
+        print(f"wrote {written}")
+    print(outcome.result.answer)
+    print(f"[recorded] {outcome.log_path}")
+    return 0
+
+
 def command_health(args: argparse.Namespace) -> int:
     settings = Settings()
     report: dict[str, Any] = {"seekdb": {}, "powercontext": {}}
@@ -253,6 +277,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     list_parser = subparsers.add_parser("list-state", help="List every saved task state.")
     list_parser.set_defaults(handler=command_list_state)
+
+    ask_parser = subparsers.add_parser("ask", help="Ask MiniMax with the retrieved context.")
+    ask_parser.add_argument("--task", required=True)
+    ask_parser.add_argument("--instruction", default=DEFAULT_INSTRUCTION)
+    ask_parser.add_argument("--answer-file", default=None)
+    ask_parser.add_argument("--log-dir", default=None)
+    ask_parser.add_argument("--max-tokens", type=int, default=4096)
+    ask_parser.set_defaults(handler=command_ask)
 
     health_parser = subparsers.add_parser("health", help="Report component availability.")
     health_parser.set_defaults(handler=command_health)

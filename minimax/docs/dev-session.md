@@ -136,6 +136,7 @@ def filter_tasks(tasks, *, status=None, assignee=None, labels=None) -> list[Task
 | `docs/test-logs/before.txt` | 目标测试在改动前的基线提交上运行 | 1（8 失败 / 1 通过） |
 | `docs/test-logs/after.txt` | 同一份目标测试在改动后运行 | 0（9 通过） |
 | `docs/test-logs/regression.txt` | `tests/test_store.py` + `tests/test_cli.py` | 0（19 通过） |
+| `docs/test-logs/full-suite.txt` | 交付状态下的全部用例（目标 + 回归 + 上下文→prompt 桥接） | 0（34 通过） |
 
 改动前的失败原因是**功能未实现**，不是环境问题：
 
@@ -155,25 +156,63 @@ E   taskboard: error: unrecognized arguments: --label backend --label release
 - **本次开发**：开发助手即 MiniMax 模型（MiniMax Code / MiniMax-M3.1-Flash）。
   它消费的是上面第 2 节那份**从 seekdb 检索出来的**上下文，产出的是第 3、4 节的
   代码差异；两者一一对应，可以逐行核对。
-- **可复现的 API 路径**：`minimax_ctx/minimax_client.py` 提供 MiniMax Chat
-  Completion API 的调用与记录（请求、回答、用量写入
-  `minimax/logs/minimax-api-log.jsonl`）。配置 `MINIMAX_API_KEY`（参赛选手可获赠
-  1 个月 MiniMax Token Plan）后即可用同一条流水线重放：
+- **真实 API 调用记录已生成**：同一条流水线（从 seekdb 检索上下文 → 组装 prompt →
+  调用 MiniMax Chat Completion API → 记录请求与回答）已经跑通一次真实调用，产物在仓库里：
+
+  | 产物 | 路径 | 内容 |
+  | --- | --- | --- |
+  | 调用记录（JSON Lines） | `docs/evidence/minimax-api-log.jsonl` | endpoint、模型、**完整 prompt**（含从 seekdb 检索到的规格 / 代码 / 测试正文）、模型回答、token 用量、`finish_reason`、上下文指纹 |
+  | 回答与来源 | `docs/evidence/minimax-answer.md` | 模型回答全文 + 本次检索到的来源清单 + 用量 |
+  | 导出脚本 | `scripts/export_api_log.py` | 把本地日志整理成证据文件；写入前检查记录里不含凭据标记，且拒绝导出被 token 上限截断的回答 |
+
+  这一次调用的实际情况：
+
+  | 项 | 值 |
+  | --- | --- |
+  | endpoint | `https://api.minimaxi.com/v1/chat/completions` |
+  | 模型 | `MiniMax-M3.1-Flash` |
+  | 上下文指纹 | `4a0df2a81f686624de601aa92d0db11874704e265c7587ceab1d694c00f6df17` |
+  | prompt tokens / completion tokens | 2989 / 12796（其中 reasoning 10489） |
+  | 停止原因 | `stop`（回答完整，未被截断） |
+  | 回答长度 | 8523 字符 |
+  | 检索到的来源 | `minimax/specs/SPEC-TASKBOARD-LABEL-FILTER.md`、`minimax/taskboard/filters.py`、`minimax/taskboard/cli.py`、`minimax/taskboard/model.py`、`minimax/tests/test_filters.py` |
+
+  记录里的 prompt 就是本次开发实际使用的那份上下文：规格条目全文、上面四个代码文件
+  与测试文件的全文，全部来自 seekdb 检索（来源见第 2 节），不是手写的。
+
+- **回答与提交内容一致**：模型给出的 `filter_tasks` 与 `build_parser` 实现，与本仓库
+  已提交的 `minimax/taskboard/filters.py`、`minimax/taskboard/cli.py` **逐字相同**；
+  它在 `main` 里也用了 `labels=args.label or None`。它给出的测试用例与
+  `minimax/tests/test_filters.py` 一一对应，并在回答里给出了「测试 ↔ 规格条目」的对照表，
+  可与本文件第 2、4 节逐条核对。
+
+- **凭据不落盘**：API Key 只通过环境变量 `MINIMAX_API_KEY` 注入，用于给请求签名；
+  日志与证据文件里只有 endpoint、模型、prompt、回答与用量，没有任何凭据。
+
+  重放方式：
 
   ```bash
   export MINIMAX_API_KEY=...
   export MINIMAX_BASE_URL=https://api.minimaxi.com/v1
-  export MINIMAX_MODEL=MiniMax-M2
+  export MINIMAX_MODEL=MiniMax-M3.1-Flash
+  export SEEKDB_PORT=2881
+  cd minimax
+  python -m minimax_ctx ask \
+    --task "为任务看板增加按标签筛选任务的能力" \
+    --answer-file docs/evidence/minimax-answer.md \
+    --max-tokens 65536
+  python scripts/export_api_log.py logs/minimax-api-log.jsonl docs/evidence/minimax-api-log.jsonl
   ```
 
-  未配置密钥时该路径不会调用模型，验证样例仍然可以完整跑完——
-  本文件记录的会话本身就是 MiniMax 参与的证据。
+  未配置密钥时 `ask` 不会调用模型，其余流程（导入、检索、状态、测试）照常可用。
 
 ## 7. 命令与版本
 
 | 项 | 值 |
 | --- | --- |
 | Python | 3.12 |
+| 上下文模块 | `minimax/minimax_ctx`（导入 → 检索 → 状态 → MiniMax 调用） |
+| MiniMax 模型 | `MiniMax-M3.1-Flash`（API 调用记录见第 6 节） |
 | PowerContext | `oceanbase/powercontext`（`master`），`powercontext.client` SDK |
 | seekdb | v1.3.0.0（`5.7.25-OceanBase seekdb-v1.3.0.0`） |
 | PyMySQL | 1.x |

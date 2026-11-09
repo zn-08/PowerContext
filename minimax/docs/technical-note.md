@@ -11,6 +11,7 @@ minimax/
 │   ├── context.py            上下文组装：规格 → 扩展查询 → 代码 / 测试 → 重排
 │   ├── powercontext_state.py 状态层：PowerContext Memory 的保存与读回
 │   ├── minimax_client.py     MiniMax API 调用与记录（可选）
+│   ├── ask.py                把检索到的上下文组装成 prompt，调用 MiniMax 并留痕
 │   └── cli.py                命令行入口
 ├── taskboard/                业务工程（任务看板）
 ├── specs/                    SDD 规格
@@ -25,10 +26,14 @@ minimax/
 工程资料 ──import──▶ seekdb.material（FULLTEXT / IK 分词）
                           │
       任务描述 ──context─┴─▶ 规格条目 ──扩展查询──▶ 代码符号 + 测试函数
-                                                     │
-                                          PowerContext Memory ◀──save-state
-                                                   │                    │
-                                                   └──load-state────────┘
+                          │                             │
+                          └──────── ask ───────────────┘
+                                    │
+                         MiniMax Chat Completion API
+                                    │
+                     请求 / 回答 / 用量 / 上下文指纹（JSON Lines）
+
+任务状态 ──save-state──▶ PowerContext Memory ──load-state──▶ 任务状态
 ```
 
 ## 2. 上下文怎么选
@@ -50,7 +55,7 @@ minimax/
 | --- | --- | --- |
 | seekdb | 存工程资料与全文索引，检索结果直接构成任务上下文 | `minimax_ctx/materials.py` 的建表 / `ALTER TABLE ... WITH PARSER ik` / `MATCH ... AGAINST`；每次请求打印实际 SQL |
 | PowerContext | 存任务进展与验证结果，跨进程读回 | `minimax_ctx/powercontext_state.py` 调 `/v1/memory/remember`、`/v1/memory/search`；演示中由新进程读回 |
-| MiniMax | 参与本次代码修改 | `docs/dev-session.md`：任务、提供的上下文、修改过程、代码差异、验证结果 |
+| MiniMax | 参与本次代码修改 | `docs/dev-session.md`：任务、提供的上下文、修改过程、代码差异、验证结果；`docs/evidence/minimax-api-log.jsonl`：一次真实 API 调用的请求、回答与用量 |
 
 ## 4. 本次修改
 
@@ -69,4 +74,5 @@ minimax/
 - PowerContext 未配置 embedding 模型时，Memory 检索只能用关键词模式（`mode=fts`）。
 - scope id 由服务端分配，模块按标题找回自己创建的 scope，重启后仍是同一个。
 - 上下文检索是关键词方案，不做语义召回；扩展词来自规格条目，规格越具体越准。
-- MiniMax API 路径需要 `MINIMAX_API_KEY`，否则以开发会话作为参与证据。
+- `ask` 的 API 路径需要 `MINIMAX_API_KEY`；未配置密钥时模块不调用模型，其余流程照常可用。
+- 已生成的调用记录里不含任何凭据：密钥只经环境变量注入，用于给请求签名。

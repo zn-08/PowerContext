@@ -60,10 +60,20 @@ class ContextPack:
         return paths
 
     def digest(self) -> str:
-        """Return a stable fingerprint of the pack content."""
+        """Return a stable fingerprint of the pack content.
 
-        payload = json.dumps(self._payload(), ensure_ascii=False, sort_keys=True).encode("utf-8")
+        The generation time is deliberately left out: the same material must
+        produce the same fingerprint on every run, otherwise a reviewer could
+        not recompute it and the recorded exchanges would not be comparable.
+        """
+
+        payload = json.dumps(self._fingerprint_payload(), ensure_ascii=False, sort_keys=True).encode("utf-8")
         return hashlib.sha256(payload).hexdigest()
+
+    def _fingerprint_payload(self) -> dict[str, Any]:
+        payload = self._payload()
+        payload.pop("generated_at", None)
+        return payload
 
     def _payload(self) -> dict[str, Any]:
         return {
