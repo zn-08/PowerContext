@@ -69,13 +69,23 @@ def fetch_turns(connection, session_id: str) -> list[dict]:
     return rows
 
 
+LORE_COLUMNS = "title, body, title_zh, body_zh, tags"
+
+
 def fetch_lore(connection, query: str) -> list[dict]:
-    """Look the topic up in the lore table with the native full-text index."""
+    """Look the topic up in the lore table with the native full-text index.
+
+    The index uses the ``ik`` parser, so a Chinese question is segmented the
+    same way the Chinese lore column was indexed, and an English question
+    still matches the English column.  One statement, one index, no
+    client-side keyword munging.
+    """
 
     statement = (
-        "SELECT id, keyword, title, body, MATCH(title, body) AGAINST (%s) AS relevance "
-        "FROM npc_lore WHERE MATCH(title, body) AGAINST (%s) "
-        "ORDER BY relevance DESC LIMIT %s"
+        f"SELECT id, keyword, title, body, title_zh, body_zh, "
+        f"MATCH({LORE_COLUMNS}) AGAINST (%s) AS relevance "
+        f"FROM npc_lore WHERE MATCH({LORE_COLUMNS}) AGAINST (%s) "
+        f"ORDER BY relevance DESC LIMIT %s"
     )
     LOG.info("lore query: %s", statement)
     with connection.cursor(pymysql.cursors.DictCursor) as cursor:
@@ -123,6 +133,8 @@ def build_context(session_id: str, query: str) -> dict:
                 "keyword": row["keyword"],
                 "title": row["title"],
                 "body": row["body"],
+                "title_zh": row["title_zh"],
+                "body_zh": row["body_zh"],
                 "relevance": float(row["relevance"] or 0.0),
             }
             for row in lore

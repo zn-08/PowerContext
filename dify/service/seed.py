@@ -5,6 +5,13 @@ turn log of every player.  The lore table carries a native full-text index so
 the workflow can ask "what does the world know about this topic" with a
 ``MATCH ... AGAINST`` query instead of a scan.
 
+Every lore row is **bilingual**: the English columns carry the original tavern
+canon, the Chinese columns carry the same setting in the language the players
+actually type in.  The full-text index uses the ``ik`` parser so a Chinese
+query such as ``龙虾节的配方`` is segmented and matched against the Chinese
+column of the same row, and an English query such as ``lobster`` still matches
+the English column.
+
 Run it once against the seekdb instance the application will use::
 
     python seed.py
@@ -22,48 +29,63 @@ USER = os.environ.get("SEEKDB_USER", "root")
 PASSWORD = os.environ.get("SEEKDB_PASSWORD", "")
 DATABASE = os.environ.get("SEEKDB_DATABASE", "npc_memory_demo")
 
+# (keyword, title_en, body_en, title_zh, body_zh, tags)
 LORE = [
     (
         "lamp",
         "moon lamp",
         "The moon lamp hangs above the tavern door and only lights up when someone "
         "says a word that rhymes with 'lobster'. The keeper claims it is broken.",
-        "lamp,tavern,light",
+        "月灯",
+        "酒馆门上的月灯，只在有人念出跟『龙虾』押韵的词时才会亮。掌柜嘴上说它是坏的。",
+        "lamp,tavern,light,lobster,rhyme",
     ),
     (
         "lobster",
         "lobster festival",
         "Once a year the villagers cook a lobster the size of a rowing boat in the "
         "square. The recipe is a state secret and the last cook vanished mid-recipe.",
-        "lobster,festival,village,recipe",
+        "龙虾节",
+        "一年一度，镇上要在广场烤一只赛龙舟那么大的龙虾。配方是镇上的秘密，"
+        "上一位厨子失踪在配方写到一半的时候。",
+        "lobster,festival,village,recipe,secret",
     ),
     (
         "tavern",
         "the crooked tavern",
         "The crooked tavern leans three degrees to the left, which is why the regulars "
         "always walk in circles and the landlord insists the ale is to blame.",
-        "tavern,landlord,ale",
+        "歪脖子酒馆",
+        "歪脖子酒馆朝左歪三度，所以常客进门总绕圈走，房东坚持说是麦芽酒的问题。",
+        "tavern,landlord,ale,inn",
     ),
     (
         "prank",
         "the pranking ledger",
         "The inn keeps a ledger of every prank ever played. The rule is simple: never "
         "repeat a prank that has already been written down.",
-        "prank,ledger,inn,rule",
+        "恶作剧账本",
+        "酒馆有一本账本，记着每个客人干过的每一件恶作剧。规矩很简单："
+        "记过的恶作剧不许重复。",
+        "prank,ledger,inn,rule,repeat",
     ),
     (
         "memory",
         "memory of the night watch",
         "The night watch remembers everything that happened under the moon lamp, and "
         "it never forgets a face. That is why the villagers trust it and fear it.",
-        "memory,watch,moon lamp,trust",
+        "夜巡的记忆",
+        "夜巡记着月灯底下发生过的所有事，一张脸也不忘。所以镇民既信它，也怕它。",
+        "memory,watch,moon lamp,trust,night",
     ),
     (
         "kettle",
         "the singing kettle",
         "The kettle sings only when the fire is fed with old letters. The tune it "
         "sings is always the one the writer wanted to send but never did.",
-        "kettle,fire,letters,tune",
+        "会唱歌的茶壶",
+        "茶壶只有在用旧信纸烧火时才会唱歌，唱的总是写信人想送出去却一直没送的那支曲子。",
+        "kettle,fire,letters,tune,tea",
     ),
 ]
 
@@ -92,8 +114,11 @@ def main() -> int:
               keyword VARCHAR(64) NOT NULL,
               title VARCHAR(128) NOT NULL,
               body TEXT NOT NULL,
+              title_zh VARCHAR(128) NOT NULL DEFAULT '',
+              body_zh TEXT NOT NULL,
               tags VARCHAR(255) NOT NULL,
-              FULLTEXT INDEX ft_npc_lore (title, body)
+              FULLTEXT INDEX ft_npc_lore (title, body, title_zh, body_zh, tags)
+                WITH PARSER ik
             ) DEFAULT CHARSET=utf8mb4
             """
         )
@@ -111,7 +136,8 @@ def main() -> int:
             """
         )
         cursor.executemany(
-            "INSERT INTO npc_lore (keyword, title, body, tags) VALUES (%s, %s, %s, %s)",
+            "INSERT INTO npc_lore (keyword, title, body, title_zh, body_zh, tags) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
             LORE,
         )
         for session_id, player_input, npc_reply in SEED_TURNS:
@@ -125,15 +151,16 @@ def main() -> int:
         cursor.execute("SELECT COUNT(*) FROM npc_memory")
         turn_count = cursor.fetchone()[0]
         cursor.execute(
-            "SELECT keyword, title, MATCH(title, body) AGAINST (%s) AS relevance "
-            "FROM npc_lore WHERE MATCH(title, body) AGAINST (%s) ORDER BY relevance DESC LIMIT 2",
+            "SELECT keyword, title_zh, MATCH(title, body, title_zh, body_zh, tags) AGAINST (%s) AS relevance "
+            "FROM npc_lore WHERE MATCH(title, body, title_zh, body_zh, tags) AGAINST (%s) "
+            "ORDER BY relevance DESC LIMIT 2",
             ("lobster kettle", "lobster kettle"),
         )
         sample = cursor.fetchall()
     connection.close()
     print(f"database {DATABASE}: lore rows={lore_count}, memory rows={turn_count}")
-    for keyword, title, relevance in sample:
-        print(f"  full-text hit: keyword={keyword} title={title} relevance={relevance}")
+    for keyword, title_zh, relevance in sample:
+        print(f"  full-text hit: keyword={keyword} title_zh={title_zh} relevance={relevance}")
     return 0
 
 

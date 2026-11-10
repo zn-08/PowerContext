@@ -19,7 +19,8 @@
 - 你**说过什么他会记住**（本轮对话写回 seekdb 的记忆表）；
 - 下一轮他会**翻旧账**（从记忆表读回这个玩家的历史）；
 - 你提到某个话题时，他会用**全文索引**从世界设定表里把相关设定捞出来并**引用**它
-  （`MATCH ... AGAINST`，走 seekdb 的原生全文索引）；
+  （`MATCH(title, body, title_zh, body_zh, tags) AGAINST (?)`，走 seekdb 的原生全文索引，
+  分词器用 `ik`，中英文提问都能命中）；
 - 你如果重复了以前干过的事，他会当场点破。
 
 **跨会话记忆**：把「玩家标识」改成同一个值再开一个新会话，掌柜依然记得你。
@@ -29,7 +30,7 @@
 | 组成 | 承担的作用 |
 | --- | --- |
 | **Dify（必选）** | 承担应用的核心流程编排：玩家输入 → 取记忆与设定 → 模型生成台词 → 写回记忆 → 回复玩家。流程以 Chatflow（`advanced-chat`）形式提供，提交 DSL。 |
-| **seekdb** | 作为应用的数据存储与检索能力：① `npc_memory` 表保存每个玩家的每一轮对话；② `npc_lore` 表保存世界设定，并建**原生全文索引**，用 `MATCH(title, body) AGAINST (?)` 检索与当前话题相关的设定条目。 |
+| **seekdb** | 作为应用的数据存储与检索能力：① `npc_memory` 表保存每个玩家的每一轮对话；② `npc_lore` 表保存世界设定，并建**原生全文索引**（`ik` 分词），用 `MATCH(...) AGAINST (...)` 检索与当前话题相关的设定条目。 |
 
 > 题目允许「Dify + seekdb」「Dify + PowerContext」「Dify + seekdb + PowerContext」三者之一。
 > 本作品选择 **Dify + seekdb**：seekdb 同时承担了「游戏数据存储」与「设定检索」两种职责，
@@ -42,10 +43,14 @@ dify/
 ├── README.md                       本文件
 ├── dsl/
 │   └── npc-memory-chatflow.yml     Dify Chatflow 导出（导入即用）
-└── service/
-    ├── app.py                      记忆服务：读记忆 / 全文检索设定 / 写回记忆
-    ├── seed.py                    建库建表 + 灌入世界设定与样例记忆
-    └── requirements.txt            仅依赖 PyMySQL
+├── service/
+│   ├── app.py                      记忆服务：读记忆 / 全文检索设定 / 写回记忆
+│   ├── seed.py                    建库建表 + 灌入世界设定与样例记忆
+│   └── requirements.txt            仅依赖 PyMySQL
+└── evidence/
+    ├── verification.md             验证样例的**真实执行记录**（命令行 + 返回值 + SQL 核对）
+    ├── verification-console.log    生成上述记录时的控制台输出
+    └── service-run.err.log         记忆服务运行日志（含每条实际执行的 SQL）
 ```
 
 ## 四、运行环境
@@ -89,8 +94,8 @@ python seed.py
 
 ```
 database npc_memory_demo: lore rows=6, memory rows=1
-  full-text hit: keyword=kettle title=the singing kettle relevance=1.4256471646317077
-  full-text hit: keyword=lobster title=lobster festival relevance=0.6307954452608108
+  full-text hit: keyword=kettle title_zh=会唱歌的茶壶 relevance=0.9112987714926823
+  full-text hit: keyword=lobster title_zh=龙虾节 relevance=0.6307954452608108
 ```
 
 > `seed.py` 会 `DROP DATABASE IF EXISTS npc_memory_demo` 后重建，可重复执行以复位样例状态。
@@ -125,7 +130,8 @@ curl http://127.0.0.1:8808/health
 
 ## 六、验证样例
 
-下面三步在**本机真实跑过**，输出是实际结果（服务日志里的 SQL 一并附上）。
+下面三步在**本机真实跑过**，输出是实际结果。完整记录（含每条 SQL 与 seekdb 侧核对）
+见 [`evidence/verification.md`](evidence/verification.md)。
 
 ### 样例 1 · 第一次来：掌柜还不认识你
 
@@ -141,11 +147,22 @@ curl http://127.0.0.1:8808/health
   "session_id": "player-utf8",
   "query": "我把房东的茶壶藏起来了",
   "memory": [],
-  "lore": []
+  "lore": [
+    {
+      "id": 6,
+      "keyword": "kettle",
+      "title": "the singing kettle",
+      "body": "The kettle sings only when the fire is fed with old letters. ...",
+      "title_zh": "会唱歌的茶壶",
+      "body_zh": "茶壶只有在用旧信纸烧火时才会唱歌，唱的总是写信人想送出去却一直没送的那支曲子。",
+      "relevance": 0.9112987714926823
+    }
+  ]
 }
 ```
 
-> 第一次对话没有任何历史，掌柜不会凭空提起账本。
+> 第一次对话没有任何历史，掌柜不会凭空提起账本；
+> 但他**已经能引用设定**——中文提问被 `ik` 分词后命中了中文设定列。
 
 ### 样例 2 · 同一个玩家再来：他翻旧账，并引用世界设定
 
@@ -154,7 +171,7 @@ curl http://127.0.0.1:8808/health
 - 玩家标识：`player-utf8`
 - 玩家这次说了什么：`我要再藏一次茶壶`
 
-记忆服务返回（`GET /context`，**这次带回了上一轮的记忆**，并且用全文索引捞出了设定）：
+记忆服务返回（`GET /context`，**这次带回了上一轮的记忆**）：
 
 ```json
 {
@@ -165,7 +182,7 @@ curl http://127.0.0.1:8808/health
       "turn_no": 1,
       "player_input": "我把房东的茶壶藏起来了",
       "npc_reply": "记下来了。茶壶，失踪，暂记在玩家名下。",
-      "created_at": "2026-11-04 19:13:21"
+      "created_at": "2026-11-10 12:47:27"
     }
   ],
   "lore": [
@@ -173,8 +190,9 @@ curl http://127.0.0.1:8808/health
       "id": 4,
       "keyword": "prank",
       "title": "the pranking ledger",
-      "body": "The inn keeps a ledger of every prank ever played. The rule is simple: never repeat a prank that has already been written down.",
-      "relevance": 0.615
+      "title_zh": "恶作剧账本",
+      "body_zh": "酒馆有一本账本，记着每个客人干过的每一件恶作剧。规矩很简单：记过的恶作剧不许重复。",
+      "relevance": 0.6
     }
   ]
 }
@@ -198,7 +216,8 @@ curl http://127.0.0.1:8808/health
     "id": 2,
     "keyword": "lobster",
     "title": "lobster festival",
-    "body": "Once a year the villagers cook a lobster the size of a rowing boat in the square. The recipe is a state secret and the last cook vanished mid-recipe.",
+    "title_zh": "龙虾节",
+    "body_zh": "一年一度，镇上要在广场烤一只赛龙舟那么大的龙虾。配方是镇上的秘密，上一位厨子失踪在配方写到一半的时候。",
     "relevance": 0.63
   }
 ]
@@ -219,9 +238,9 @@ $ curl -X POST http://127.0.0.1:8808/memory -H 'Content-Type: application/json' 
 记忆服务把每次执行的语句打进日志（`logging` 输出到 stderr），例如：
 
 ```
-2026-11-04 19:13:58,345 INFO insert query: INSERT INTO npc_memory (session_id, turn_no, player_input, npc_reply, created_at) SELECT %s, COALESCE(MAX(turn_no), 0) + 1, %s, %s, NOW() FROM npc_memory WHERE session_id = %s
-2026-11-04 19:13:58,394 INFO turns query: SELECT turn_no, player_input, npc_reply, created_at FROM npc_memory WHERE session_id = %s ORDER BY turn_no DESC LIMIT %s
-2026-11-04 19:13:58,405 INFO lore query: SELECT id, keyword, title, body, MATCH(title, body) AGAINST (%s) AS relevance FROM npc_lore WHERE MATCH(title, body) AGAINST (%s) ORDER BY relevance DESC LIMIT %s
+2026-11-10 12:47:27,101 INFO insert query: INSERT INTO npc_memory (session_id, turn_no, player_input, npc_reply, created_at) SELECT %s, COALESCE(MAX(turn_no), 0) + 1, %s, %s, NOW() FROM npc_memory WHERE session_id = %s
+2026-11-10 12:47:27,140 INFO turns query: SELECT turn_no, player_input, npc_reply, created_at FROM npc_memory WHERE session_id = %s ORDER BY turn_no DESC LIMIT %s
+2026-11-10 12:47:27,151 INFO lore query: SELECT id, keyword, title, body, title_zh, body_zh, MATCH(title, body, title_zh, body_zh, tags) AGAINST (%s) AS relevance FROM npc_lore WHERE MATCH(title, body, title_zh, body_zh, tags) AGAINST (%s) ORDER BY relevance DESC LIMIT %s
 ```
 
 还可以直接在 seekdb 上核对：
@@ -230,13 +249,13 @@ $ curl -X POST http://127.0.0.1:8808/memory -H 'Content-Type: application/json' 
 -- 记忆表里确实有这一轮
 SELECT session_id, turn_no, player_input, npc_reply FROM npc_memory ORDER BY session_id, turn_no;
 
--- 全文索引确实建在设定表上
+-- 全文索引确实建在设定表上（注意 FULLTEXT + ik）
 SHOW INDEX FROM npc_lore;
 
 -- 设定检索走的是原生全文索引
-SELECT keyword, title, MATCH(title, body) AGAINST ('lobster kettle') AS relevance
+SELECT keyword, title_zh, MATCH(title, body, title_zh, body_zh, tags) AGAINST ('lobster kettle') AS relevance
   FROM npc_lore
- WHERE MATCH(title, body) AGAINST ('lobster kettle')
+ WHERE MATCH(title, body, title_zh, body_zh, tags) AGAINST ('lobster kettle')
  ORDER BY relevance DESC LIMIT 3;
 ```
 
@@ -248,4 +267,4 @@ SELECT keyword, title, MATCH(title, body) AGAINST ('lobster kettle') AS relevanc
   需要用 `host.docker.internal` 或容器网络内的服务名。
 - 记忆按 `session_id` 划分，没有做跨会话的用户身份认证——题目考察的是「上下文是否被真正复用」，
   身份属于作品自己的设计。
-- 世界设定是 6 条种子数据，通过全文索引检索；设定更多时 `MATCH` 的召回效果会更好。
+- 世界设定是 6 条种子数据（中英双语），通过全文索引检索；设定更多时 `MATCH` 的召回效果会更好。
