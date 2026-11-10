@@ -92,9 +92,25 @@ qoder/
 
 ```bash
 docker run -d --name papercompass-seekdb -p 2881:2881 oceanbase/seekdb:latest
-# 或用本地二进制：./seekdb --port=2881 --nodaemon
+```
+
+**没有 Docker 也能跑**——本项目只通过 MySQL 协议连 seekdb，二进制、容器、远程实例都行：
+
+```bash
+# 方式 B：官方二进制（下载后解压即用）
+./seekdb --port=2881 --nodaemon
+
+# 方式 C：用已有的 seekdb 实例（把地址填到环境变量即可）
+export SEEKDB_HOST=10.0.0.9 SEEKDB_PORT=2881 SEEKDB_USER=root SEEKDB_PASSWORD=''
+```
+
+确认可用（root 账号、空密码）：
+
+```bash
 mysql -h127.0.0.1 -P2881 -uroot -e "SELECT VERSION()"
 ```
+
+> `npm run setup-db` 会自动建库 `papercompass`，重复执行幂等，不会重复建集合。
 
 ### 2. 装依赖 + 建库 + 灌示例语料
 
