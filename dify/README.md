@@ -40,18 +40,30 @@
 
 ```
 dify/
-├── README.md                       本文件
-├── dsl/
-│   └── npc-memory-chatflow.yml     Dify Chatflow 导出（导入即用）
+├── README.md                              本文件（运行说明）
+├── npc-memory-chatflow.yml                Dify Chatflow 导出，DSL version 0.5.0（Dify ≥ 1.12 用这个）
+├── npc-memory-chatflow-legacy.yml         同一份工作流，DSL version 0.1.5（老版本 Dify 导入报版本不支持时改用这个）
 ├── service/
-│   ├── app.py                      记忆服务：读记忆 / 全文检索设定 / 写回记忆
-│   ├── seed.py                    建库建表 + 灌入世界设定与样例记忆
-│   └── requirements.txt            仅依赖 PyMySQL
+│   ├── app.py                             记忆服务：读记忆 / 全文检索设定 / 写回记忆
+│   ├── seed.py                            建库建表 + 灌入世界设定与样例记忆
+│   ├── start.sh                           一条命令：装依赖 → 灌数据 → 起服务
+│   └── requirements.txt                   仅依赖 PyMySQL
 └── evidence/
-    ├── verification.md             验证样例的**真实执行记录**（命令行 + 返回值 + SQL 核对）
-    ├── verification-console.log    生成上述记录时的控制台输出
-    └── service-run.err.log         记忆服务运行日志（含每条实际执行的 SQL）
+    ├── verification.md                    验证样例的**真实执行记录**（命令行 + 返回值 + SQL 核对）
+    ├── verification-console.log           生成上述记录时的控制台输出
+    └── service-run.err.log                记忆服务运行日志（含每条实际执行的 SQL）
 ```
+
+### DSL 文件的用途与导入顺序
+
+本作品只有**一个** Dify 应用，因此**只导入一个 DSL 文件**（两个文件是同一份工作流的两个 DSL 版本，不是两个应用）：
+
+| 文件 | DSL version | 适用 Dify | 什么时候用 |
+| --- | --- | --- | --- |
+| `npc-memory-chatflow.yml` | `0.5.0` | Dify ≥ 1.12（当前版本） | **默认用这个** |
+| `npc-memory-chatflow-legacy.yml` | `0.1.5` | 更早的 Dify | 导入报「版本不支持 / app version is too high」时改用这个 |
+
+导入顺序：先按第五节把 **seekdb + 记忆服务**跑起来，再导入 DSL，再按 4.2 绑定模型，最后发布应用。
 
 ## 四、运行环境
 
@@ -59,7 +71,11 @@ dify/
 | --- | --- |
 | seekdb | 官方发行版，MySQL 协议；本文用 `5.7.25-OceanBase seekdb-v1.3.0.0` 验证 |
 | Python | 3.10+，仅需 `PyMySQL`（`pip install -r service/requirements.txt`） |
-| Dify | 支持 DSL `version: 0.1.5` 的版本（`advanced-chat` 模式）。Dify Cloud 同样适用 |
+| Dify | **≥ 1.12**（对应 DSL `version: 0.5.0`）；更早的版本请用 `npc-memory-chatflow-legacy.yml`。Dify Cloud 同样适用 |
+| 模型 | 任意能通过 Dify 插件接入的对话模型。DSL 里预置了 `langgenius/openai/openai` + `gpt-4o-mini`，**导入后请在节点里换成你自己有额度、且评审环境能访问的模型**；模型只负责「按资料说话」，不负责检索 |
+
+> 模型插件不在 DSL 里打包（DSL 不含任何凭据）。导入后若掌柜节点显示「模型不可用」，
+> 在该节点右上角选择你自己的模型即可，其余节点无需改动。
 
 ## 五、完整运行步骤
 
@@ -102,6 +118,15 @@ database npc_memory_demo: lore rows=6, memory rows=1
 
 ### 3. 起记忆服务
 
+一条命令（装依赖 → 灌数据 → 起服务）：
+
+```bash
+cd dify/service
+bash start.sh
+```
+
+等价的手工步骤（服务已在运行时用这三条）：
+
 ```bash
 export SEEKDB_HOST=127.0.0.1 SEEKDB_PORT=2881 SEEKDB_USER=root SEEKDB_PASSWORD=''
 export SEEKDB_DATABASE=npc_memory_demo
@@ -118,15 +143,22 @@ curl http://127.0.0.1:8808/health
 
 ### 4. 导入 Dify DSL
 
-1. Dify 控制台 → 「工作室」→ 「导入 DSL」→ 上传 `dsl/npc-memory-chatflow.yml`。
+1. Dify 控制台 → 「工作室」→ 「导入 DSL」→ 上传 **`npc-memory-chatflow.yml`**
+   （Dify 报版本不支持时改上传 `npc-memory-chatflow-legacy.yml`；两个文件是同一个应用，不要两个都导入）。
 2. **设置环境变量** `SERVICE_BASE_URL` = 记忆服务地址（默认 `http://127.0.0.1:8808`；
    若 Dify 与记忆服务不在同一台机器，改成可达地址，例如 `http://host.docker.internal:8808`）。
-3. **配置模型**：DSL 里预置了 `langgenius/openai/openai` + `gpt-4o-mini`，导入后请改成
-   你自己有额度、且评审环境能访问的模型；模型只负责「按资料说话」，不负责检索。
-4. 发布应用（建议先在「预览」里跑一遍第五节的样例）。
+3. **配置模型**：DSL 里预置了 `langgenius/openai/openai` + `gpt-4o-mini`，导入后请在「掌柜」节点里
+   改成你自己有额度、且评审环境能访问的模型；模型只负责「按资料说话」，不负责检索。
+   DSL 不含任何 API Key，导入后需要你在 Dify 里配置自己的模型凭据。
+4. 发布应用。
+5. **应用入口**：发布后 Dify 会给出应用地址（形如 `http://<你的域名>/chat/<app-id>`），
+   在「工作室 → 记得你所有恶作剧的掌柜 → 预览 / API」里都能直接对话；
+   也可以用应用 API（`/v1/chat-messages`）按第六节的样例调用。
 
 > 两个 HTTP Request 节点分别指向 `{{#env.SERVICE_BASE_URL#}}/context` 与
 > `{{#env.SERVICE_BASE_URL#}}/memory`，换地址只需要改这一个环境变量。
+> 两个 HTTP 节点都开了 3 次重试；「掌柜」节点也带了重试与 `default_value` 兜底，
+> 模型侧偶发失败不会让整轮对话崩掉。
 
 ## 六、验证样例
 
@@ -259,7 +291,18 @@ SELECT keyword, title_zh, MATCH(title, body, title_zh, body_zh, tags) AGAINST ('
  ORDER BY relevance DESC LIMIT 3;
 ```
 
-## 八、已知限制
+## 八、异常处理
+
+| 情况 | 行为 |
+| --- | --- |
+| 客户端中途断开（取消请求、网络抖动） | 记一条 info 日志，不打 traceback，不影响其它请求 |
+| seekdb 不可达 | `/health` 与 `/context` 返回 500 与错误信息；`seed.py` 报错退出 |
+| 请求路径不存在 | 返回 404 与 `{"ok": false, "error": "unknown path ..."}` |
+| 请求体不是合法 JSON | 返回 400 与错误信息 |
+| 模型侧超时 / 429 / 5xx | 「掌柜」节点重试 3 次（间隔 1s），仍失败则输出空值继续，流程不崩 |
+| 记忆服务地址不可达 | 两个 HTTP 节点各重试 3 次；对话流程仍会失败，需要按第五节把服务起起来 |
+
+## 九、已知限制
 
 - 记忆服务是单文件 HTTP 服务，用 Python 标准库实现，只依赖 PyMySQL，方便评审环境快速拉起；
   它**不是**生产级组件，没有鉴权与多副本部署。

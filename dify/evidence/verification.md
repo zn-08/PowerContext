@@ -75,7 +75,7 @@ $ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=我要再藏一�
       "turn_no": 1,
       "player_input": "我把房东的茶壶藏起来了",
       "npc_reply": "记下来了。茶壶，失踪，暂记在玩家名下。",
-      "created_at": "2026-11-10 12:48:30"
+      "created_at": "2026-11-10 21:09:01"
     }
   ],
   "lore": [

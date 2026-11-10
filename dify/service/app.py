@@ -145,16 +145,29 @@ def build_context(session_id: str, query: str) -> dict:
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
+    def handle(self) -> None:
+        try:
+            super().handle()
+        except (ConnectionResetError, BrokenPipeError) as error:
+            # The peer went away before the request was complete.  A client that
+            # gives up on a request is not a service error, so it must not end
+            # up in the log as a traceback.
+            LOG.info("client closed the connection: %s", error)
+
     def log_message(self, fmt: str, *args: object) -> None:
         LOG.info("%s - %s", self.address_string(), fmt % args)
 
     def _reply(self, status: int, payload: dict) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (ConnectionResetError, BrokenPipeError) as error:
+            # Nobody is listening anymore, there is nothing left to answer.
+            LOG.info("client closed the connection before the answer: %s", error)
 
     def do_GET(self) -> None:  # noqa: N802 - http.server API
         parsed = urlparse(self.path)

@@ -197,6 +197,13 @@ workflow:
           mode: chat
           name: gpt-4o-mini
           provider: langgenius/openai/openai
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 1000
+        error_strategy:
+          type: default-value
+          default_value: ''
         prompt_template:
         - id: sys-1
           role: system
