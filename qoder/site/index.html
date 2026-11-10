@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>文献罗盘 PaperCompass · Qoder × OceanBase 赛题作品</title>
+    <meta name="description" content="用 seekdb 的全文索引 + 向量索引做混合检索，把检索足迹与复习计划存进数据库的文献速查台。" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <p class="eyebrow">Qoder × OceanBase 大赛作品</p>
+      <h1>文献罗盘 <span class="en">PaperCompass</span></h1>
+      <p class="lead">
+        把论文、课程笔记、实验记录丢进来，用一句自然语言问「混合检索怎么融合两路结果」，
+        立刻定位到段落与出处；顺手把这篇排进复习计划，下次打开还记得该复习什么。
+      </p>
+      <p class="tags">
+        <span class="tag">seekdb 全文索引（ik）</span>
+        <span class="tag">seekdb 向量索引（HNSW / cosine）</span>
+        <span class="tag">DBMS_HYBRID_SEARCH 库内 RRF 融合</span>
+        <span class="tag">记忆表：检索足迹 + 复习计划</span>
+      </p>
+      <p class="links">
+        <a class="btn" href="https://github.com/zn-08/PowerContext/tree/2026-competition-ecosystem/qoder">查看源码</a>
+        <a class="btn ghost" href="#demo">先看效果</a>
+      </p>
+    </header>
+
+    <main>
+      <section class="block">
+        <h2>解决的痛点</h2>
+        <div class="cards">
+          <div class="card">
+            <h3>找一段话要翻十几个文件</h3>
+            <p>笔记散在十几个 Markdown 里，记不清关键词的时候，搜索框完全用不上，只记得「好像在哪篇里说过」。</p>
+          </div>
+          <div class="card">
+            <h3>抄原文的笔记检索不到</h3>
+            <p>笔记越是抄原文，越难被自己的提问命中——提问用的是自己的措辞，笔记用的是作者的措辞。</p>
+          </div>
+          <div class="card">
+            <h3>看完就忘，没人提醒</h3>
+            <p>读过的文献没有复习节奏，下次写东西时又想不起来，只能重新翻一遍。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>三个核心功能</h2>
+        <div class="cards">
+          <div class="card">
+            <h3>① 混合检索</h3>
+            <p>段落级切块后同时写入全文索引与向量索引，查询走一条混合检索 SQL，全文与向量两路结果由数据库用 RRF 融合，客户端不拼合。</p>
+          </div>
+          <div class="card">
+            <h3>② 检索足迹即记忆</h3>
+            <p>每次检索的提问、命中段落与分数都落进 <code>paper_study</code> 表，检索历史就是可查询的数据，而不是浏览器缓存。</p>
+          </div>
+          <div class="card">
+            <h3>③ 复习计划</h3>
+            <p>把资料排进复习计划，按 SM-2 简化算法打分，到期的条目会出现在「今天该复习的」里，间隔自动拉长。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="block" id="demo">
+        <h2>效果演示</h2>
+        <p class="note">
+          下面的结果是从<strong>真实 seekdb 实例</strong>跑出来的快照（导出时间见页脚），
+          包含数据库生成的混合检索 SQL 与每条命中的全文名次、向量名次。
+          想跑实时检索，按 <a href="#run">运行说明</a> 起本地服务即可。
+        </p>
+        <div class="demo-bar" id="demo-bar"></div>
+        <div id="demo-out" class="demo-out"></div>
+      </section>
+
+      <section class="block">
+        <h2>技术结合：seekdb 到底做了什么</h2>
+        <table class="tbl">
+          <thead>
+            <tr><th>能力</th><th>用在哪</th><th>怎么核对</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>全文索引（ik 分词）</td><td>段落正文的 <code>MATCH(body) AGAINST (...)</code> 精确命中</td><td><code>SHOW INDEX FROM paper_doc</code> 可见 <code>ft_paper_doc_body</code></td></tr>
+            <tr><td>向量索引（HNSW / cosine）</td><td>段落向量 <code>emb VECTOR(384)</code>，查询向量按 IDF 加权</td><td><code>EXPLAIN</code> 显示 <code>VECTOR INDEX SCAN</code></td></tr>
+            <tr><td>混合检索</td><td><code>DBMS_HYBRID_SEARCH.GET_SQL()</code> 生成单条 SQL，RRF 在库内融合</td><td>页面「本次执行的 SQL」折叠区</td></tr>
+            <tr><td>记忆表</td><td><code>paper_study</code>（检索足迹）、<code>paper_review</code>（复习计划）、<code>paper_term</code>（词表与 IDF）</td><td>页脚附数据库结构</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="block" id="run">
+        <h2>运行说明（评审可直接复现）</h2>
+        <pre class="code"># 1. 起一个 seekdb（MySQL 协议，默认 2881）
+docker run -d --name papercompass-seekdb -p 2881:2881 oceanbase/seekdb:latest
+
+# 2. 装依赖、建库建表、灌入示例语料
+cd qoder
+npm install
+npm run setup-db
+
+# 3. 起服务（默认 5174）
+npm start
+# 打开 http://127.0.0.1:5174
+
+# 4. 端到端自测（同时产出 evidence/selftest.md）
+npm run selftest</pre>
+        <p class="note">
+          环境变量：<code>SEEKDB_HOST</code> / <code>SEEKDB_PORT</code> / <code>SEEKDB_USER</code> /
+          <code>SEEKDB_PASSWORD</code> / <code>SEEKDB_DATABASE</code> / <code>PORT</code> /
+          <code>EMBED_DIM</code> / <code>SEARCH_MODE</code>（<code>native</code> 或 <code>sql</code>）。
+          向量是<strong>完全本地</strong>的特征哈希 TF-IDF 向量，不需要模型下载、不需要 API Key，
+          评审环境不会有额外前置依赖。
+        </p>
+      </section>
+
+      <section class="block">
+        <h2>验证样例</h2>
+        <table class="tbl">
+          <thead><tr><th>初始状态</th><th>操作</th><th>预期</th></tr></thead>
+          <tbody>
+            <tr><td>已导入 3 篇示例笔记</td><td>检索「混合检索怎么融合两路结果」</td><td>命中《向量检索基础笔记》首段，命中方式为「全文+向量」</td></tr>
+            <tr><td>同上</td><td>检索「HNSW 的 ef_search 调到多少合适」</td><td>命中《实验记录：HNSW 参数怎么调》，中英混排照样命中</td></tr>
+            <tr><td>同上</td><td>点「看今天该复习的」→ 给「很熟」</td><td>该条目下次复习时间推到未来，间隔按 SM-2 拉长</td></tr>
+            <tr><td>同上</td><td>再次检索同一问题</td><td><code>paper_study</code> 多一条检索足迹</td></tr>
+          </tbody>
+        </table>
+        <p class="note">完整实测记录见仓库 <code>qoder/evidence/selftest.md</code>。</p>
+      </section>
+
+      <section class="block">
+        <h2>开发记录与提交信息</h2>
+        <ul class="plain">
+          <li>Qoder 开发记录（对话截图 / 录屏）：见仓库 <code>qoder/QODER-DEV.md</code></li>
+          <li>Qoder 账号 UID：<code>待填</code></li>
+          <li>代码仓库：<a href="https://github.com/zn-08/PowerContext/tree/2026-competition-ecosystem/qoder">zn-08/PowerContext · 2026-competition-ecosystem/qoder</a></li>
+          <li>项目网站：本页面（Qoder Sites 发布，可见范围「任何人都可访问」）</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>Qoder × OceanBase · 数据层：seekdb</p>
+      <p class="small" id="foot-meta"></p>
+    </footer>
+
+    <script src="./site.js"></script>
+  </body>
+</html>

@@ -1,0 +1,265 @@
+{
+  "generatedAt": "2026-11-10T04:58:05.939Z",
+  "stats": {
+    "docs": 8,
+    "terms": 715,
+    "studies": 51,
+    "reviews": 1,
+    "dim": 384,
+    "mode": "native"
+  },
+  "queries": [
+    {
+      "query": "混合检索怎么融合两路结果",
+      "note": "中文语义问句",
+      "mode": "native",
+      "sql": "SELECT ifnull(`_fts`.`id`, `_vs`.`id`) as `id`, ifnull(`_fts`.`title`, `_vs`.`title`) as `title`, ifnull(`_fts`.`source`, `_vs`.`source`) as `source`, ifnull(`_fts`.`chunk_index`, `_vs`.`chunk_index`) as `chunk_index`, ifnull(`_fts`.`body`, `_vs`.`body`) as `body`, ifnull(`_fts`.`emb`, `_vs`.`emb`) as `emb`, ifnull(`_fts`.`updated_at`, `_vs`.`updated_at`) as `updated_at`, (ifnull(1 / (`_fts`.`_keyword_rank` + 60), 0) + ifnull(1 / (`_vs`.`_semantic_rank` + 60), 0)) as `_score`, _fts._keyword_rank as ft_rank, _vs._semantic_rank as vec_rank FROM ((SELECT *, RANK() over( ORDER BY `_keyword_score` DESC) as `_keyword_rank` FROM (SELECT /*+ opt_param('hidden_column_visible', 'true') */`__pk_increment`, `id`, `title`, `source`, `chunk_index`, `body`, `emb`, `updated_at`, match(`body`) against('混合检索怎么融合两路结果' in natural language mode) as `_keyword_score` FROM `papercompass`.`paper_doc` WHERE match(`body`) against('混合检索怎么融合两路结果' in natural language mode) ORDER BY `_keyword_score` DESC LIMIT 1000)) `_fts` full join (SELECT *, RANK() over( ORDER BY `_semantic_score` DESC) as `_semantic_rank` FROM (SELECT /*+ opt_param('hidden_column_visible', 'true') */cosine_distance(`emb`, '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.217496, 0, 0, 0.217496, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.086857, 0, 0, 0, 0, 0.217496, -0.217496, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.217496, 0, 0, 0.217496, 0, 0, 0, 0, 0, 0, -0.157292, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.086857, 0, 0, 0, 0, 0, 0, 0.217496, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.086857, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.434992, 0, 0, 0, 0, 0, 0, 0, 0.157292, 0, 0, -0.157292, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.217496, 0, 0, 0, -0.368253, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.157292, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.217496, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.217496, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.217496, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.182279, 0, 0, 0, 0, 0, 0, 0, 0]') as `_distance`, `__pk_increment`, `id`, `title`, `source`, `chunk_index`, `body`, `emb`, `updated_at`, round(1 - cosine_distance(`emb`, '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.217496, 0, 0, 0.217496, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.086857, 0, 0, 0, 0, 0.217496, -0.217496, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.217496, 0, 0, 0.217496, 0, 0, 0, 0, 0, 0, -0.157292, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.086857, 0, 0, 0, 0, 0, 0, 0.217496, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.086857, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.434992, 0, 0, 0, 0, 0, 0, 0, 0.157292, 0, 0, -0.157292, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.217496, 0, 0, 0, -0.368253, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.157292, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.217496, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.217496, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.217496, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.182279, 0, 0, 0, 0, 0, 0, 0, 0]') / 2, 8) as `_semantic_score` FROM `papercompass`.`paper_doc` ORDER BY `_distance` APPROXIMATE LIMIT 10)) `_vs` on `_fts`.`__pk_increment` = `_vs`.`__pk_increment`) ORDER BY `_score` DESC, ifnull(`_vs`.`__pk_increment`, `_fts`.`__pk_increment`) LIMIT 5",
+      "hits": [
+        {
+          "id": "01-向量检索基础.md::0::84ff3cff",
+          "title": "向量检索基础笔记",
+          "source": "01-向量检索基础.md",
+          "chunkIndex": 0,
+          "snippet": "混合检索是把「关键词检索」和「语义检索」两路结果合并排序。最常见的融合方式是 RRF（Reciprocal Rank Fusion）：对每一路结果按名次算分，公式是 1/(k + rank)，k 通常取 60，然后把两路分数相加再排序。 RRF 的好处是不用归一化两边的原始分数。BM25 分数和余弦相似度量纲完全不同，直接加权很脆，RRF 只用名次，鲁棒得多。 HNSW 是一种近似最近邻图索引。查询时从入口点出发，沿着「离查询更近的邻居」贪心下降，最后得到近似的 top-k。它的召回率与搜索速度由 ef_construction 和 ef_search 两个参数控制。",
+          "hitBy": "both",
+          "rrfScore": 0.0328,
+          "vecRank": 1,
+          "ftRank": 1
+        },
+        {
+          "id": "selftest-sample.md::0::af6ca140",
+          "title": "实验记录：HNSW 参数怎么调",
+          "source": "selftest-sample.md",
+          "chunkIndex": 0,
+          "snippet": "# 实验记录：HNSW 参数怎么调 在 10 万条 768 维向量上，ef_construction=200、ef_search=64 时，Recall@10 稳定在 0.95 左右，P99 延迟 18 毫秒。ef_search 调到 128 之后 Recall 只涨了 0.01，延迟却翻倍。 结论是：先调 ef_search 性价比最高，达到收益拐点后再调 ef_construction。",
+          "hitBy": "both",
+          "rrfScore": 0.0323,
+          "vecRank": 2,
+          "ftRank": 2
+        },
+        {
+          "id": "01-向量检索基础.md::1::83ff3b6c",
+          "title": "向量检索基础笔记",
+          "source": "01-向量检索基础.md",
+          "chunkIndex": 1,
+          "snippet": "文档切块会显著影响检索质量。块太大，噪声多；块太小，上下文断裂，命中了也看不懂。常见做法是按自然段切，再加一点重叠。",
+          "hitBy": "both",
+          "rrfScore": 0.0317,
+          "vecRank": 3,
+          "ftRank": 3
+        },
+        {
+          "id": "02-文献阅读与笔记方法.md::0::7c73637b",
+          "title": "文献阅读与笔记方法",
+          "source": "02-文献阅读与笔记方法.md",
+          "chunkIndex": 0,
+          "snippet": "读论文先看摘要和结论，再看图，再回头读方法。很多时间花在读引言上，但真正决定能不能复现的是方法与实验设置。 做笔记不要抄原文，要写「这句话回答了什么问题」。抄原文的笔记在检索时很难命中，因为查询词和作者用词不一致。 一个可复用的笔记模板：问题 / 方法 / 数据 / 结论 / 我的疑问 / 与哪篇论文冲突。最后一项最容易忽略，但它是综述写作的抓手。 复习要主动。看完当天写三句话概括，隔三天再写一次，一周后再写一次。这个间隔重复的节奏对长期记忆的留存率提升很明显。",
+          "hitBy": "both",
+          "rrfScore": 0.0313,
+          "vecRank": 4,
+          "ftRank": 4
+        },
+        {
+          "id": "03-hybrid-retrieval-notes.md::2::b91c4b82",
+          "title": "Reading Notes on Hybrid Retrieval",
+          "source": "03-hybrid-retrieval-notes.md",
+          "chunkIndex": 2,
+          "snippet": "Latency matters: the lexical branch usually costs single digit milliseconds while an approximate nearest neighbour scan over millions of vectors costs tens of milliseconds. Running both in parallel keeps the tail latency close to the slower branch.",
+          "hitBy": "vector",
+          "rrfScore": 0.0154,
+          "vecRank": 5,
+          "ftRank": null
+        }
+      ]
+    },
+    {
+      "query": "HNSW 的 ef_search 调到多少合适",
+      "note": "中文 + 英文术语混排",
+      "mode": "native",
+      "sql": "SELECT ifnull(`_fts`.`id`, `_vs`.`id`) as `id`, ifnull(`_fts`.`title`, `_vs`.`title`) as `title`, ifnull(`_fts`.`source`, `_vs`.`source`) as `source`, ifnull(`_fts`.`chunk_index`, `_vs`.`chunk_index`) as `chunk_index`, ifnull(`_fts`.`body`, `_vs`.`body`) as `body`, ifnull(`_fts`.`emb`, `_vs`.`emb`) as `emb`, ifnull(`_fts`.`updated_at`, `_vs`.`updated_at`) as `updated_at`, (ifnull(1 / (`_fts`.`_keyword_rank` + 60), 0) + ifnull(1 / (`_vs`.`_semantic_rank` + 60), 0)) as `_score`, _fts._keyword_rank as ft_rank, _vs._semantic_rank as vec_rank FROM ((SELECT *, RANK() over( ORDER BY `_keyword_score` DESC) as `_keyword_rank` FROM (SELECT /*+ opt_param('hidden_column_visible', 'true') */`__pk_increment`, `id`, `title`, `source`, `chunk_index`, `body`, `emb`, `updated_at`, match(`body`) against('HNSW 的 ef_search 调到多少合适' in natural language mode) as `_keyword_score` FROM `papercompass`.`paper_doc` WHERE match(`body`) against('HNSW 的 ef_search 调到多少合适' in natural language mode) ORDER BY `_keyword_score` DESC LIMIT 1000)) `_fts` full join (SELECT *, RANK() over( ORDER BY `_semantic_score` DESC) as `_semantic_rank` FROM (SELECT /*+ opt_param('hidden_column_visible', 'true') */cosine_distance(`emb`, '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.271218, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.314303, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.149767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.149767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.149767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.375029, 0, 0, -0.271218, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.375029, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.314303, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.314303, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.149767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.375029, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.149767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.149767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]') as `_distance`, `__pk_increment`, `id`, `title`, `source`, `chunk_index`, `body`, `emb`, `updated_at`, round(1 - cosine_distance(`emb`, '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.271218, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.314303, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.149767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.149767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.149767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.375029, 0, 0, -0.271218, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.375029, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.314303, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.314303, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.149767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.375029, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.149767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.149767, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]') / 2, 8) as `_semantic_score` FROM `papercompass`.`paper_doc` ORDER BY `_distance` APPROXIMATE LIMIT 10)) `_vs` on `_fts`.`__pk_increment` = `_vs`.`__pk_increment`) ORDER BY `_score` DESC, ifnull(`_vs`.`__pk_increment`, `_fts`.`__pk_increment`) LIMIT 5",
+      "hits": [
+        {
+          "id": "selftest-sample.md::0::af6ca140",
+          "title": "实验记录：HNSW 参数怎么调",
+          "source": "selftest-sample.md",
+          "chunkIndex": 0,
+          "snippet": "# 实验记录：HNSW 参数怎么调 在 10 万条 768 维向量上，ef_construction=200、ef_search=64 时，Recall@10 稳定在 0.95 左右，P99 延迟 18 毫秒。ef_search 调到 128 之后 Recall 只涨了 0.01，延迟却翻倍。 结论是：先调 ef_search 性价比最高，达到收益拐点后再调 ef_construction。",
+          "hitBy": "both",
+          "rrfScore": 0.0328,
+          "vecRank": 1,
+          "ftRank": 1
+        },
+        {
+          "id": "01-向量检索基础.md::0::84ff3cff",
+          "title": "向量检索基础笔记",
+          "source": "01-向量检索基础.md",
+          "chunkIndex": 0,
+          "snippet": "混合检索是把「关键词检索」和「语义检索」两路结果合并排序。最常见的融合方式是 RRF（Reciprocal Rank Fusion）：对每一路结果按名次算分，公式是 1/(k + rank)，k 通常取 60，然后把两路分数相加再排序。 RRF 的好处是不用归一化两边的原始分数。BM25 分数和余弦相似度量纲完全不同，直接加权很脆，RRF 只用名次，鲁棒得多。 HNSW 是一种近似最近邻图索引。查询时从入口点出发，沿着「离查询更近的邻居」贪心下降，最后得到近似的 top-k。它的召回率与搜索速度由 ef_construction 和 ef_search 两个参数控制。",
+          "hitBy": "both",
+          "rrfScore": 0.0323,
+          "vecRank": 2,
+          "ftRank": 2
+        },
+        {
+          "id": "02-文献阅读与笔记方法.md::0::7c73637b",
+          "title": "文献阅读与笔记方法",
+          "source": "02-文献阅读与笔记方法.md",
+          "chunkIndex": 0,
+          "snippet": "读论文先看摘要和结论，再看图，再回头读方法。很多时间花在读引言上，但真正决定能不能复现的是方法与实验设置。 做笔记不要抄原文，要写「这句话回答了什么问题」。抄原文的笔记在检索时很难命中，因为查询词和作者用词不一致。 一个可复用的笔记模板：问题 / 方法 / 数据 / 结论 / 我的疑问 / 与哪篇论文冲突。最后一项最容易忽略，但它是综述写作的抓手。 复习要主动。看完当天写三句话概括，隔三天再写一次，一周后再写一次。这个间隔重复的节奏对长期记忆的留存率提升很明显。",
+          "hitBy": "both",
+          "rrfScore": 0.0317,
+          "vecRank": 3,
+          "ftRank": 3
+        },
+        {
+          "id": "03-hybrid-retrieval-notes.md::0::b71c485c",
+          "title": "Reading Notes on Hybrid Retrieval",
+          "source": "03-hybrid-retrieval-notes.md",
+          "chunkIndex": 0,
+          "snippet": "Hybrid retrieval combines a lexical branch with a semantic branch and fuses the two rankings. Reciprocal Rank Fusion is the usual choice because it only consumes ranks, not raw scores, so the two branches do not need calibration.",
+          "hitBy": "vector",
+          "rrfScore": 0.0156,
+          "vecRank": 4,
+          "ftRank": null
+        },
+        {
+          "id": "03-hybrid-retrieval-notes.md::3::ba1c4d15",
+          "title": "Reading Notes on Hybrid Retrieval",
+          "source": "03-hybrid-retrieval-notes.md",
+          "chunkIndex": 3,
+          "snippet": "Relevance feedback is cheap to implement and surprisingly effective. Remembering which documents a user opened after a query lets the next query boost the same cluster of documents.",
+          "hitBy": "vector",
+          "rrfScore": 0.0154,
+          "vecRank": 5,
+          "ftRank": null
+        }
+      ]
+    },
+    {
+      "query": "reciprocal rank fusion",
+      "note": "英文术语",
+      "mode": "native",
+      "sql": "SELECT ifnull(`_fts`.`id`, `_vs`.`id`) as `id`, ifnull(`_fts`.`title`, `_vs`.`title`) as `title`, ifnull(`_fts`.`source`, `_vs`.`source`) as `source`, ifnull(`_fts`.`chunk_index`, `_vs`.`chunk_index`) as `chunk_index`, ifnull(`_fts`.`body`, `_vs`.`body`) as `body`, ifnull(`_fts`.`emb`, `_vs`.`emb`) as `emb`, ifnull(`_fts`.`updated_at`, `_vs`.`updated_at`) as `updated_at`, (ifnull(1 / (`_fts`.`_keyword_rank` + 60), 0) + ifnull(1 / (`_vs`.`_semantic_rank` + 60), 0)) as `_score`, _fts._keyword_rank as ft_rank, _vs._semantic_rank as vec_rank FROM ((SELECT *, RANK() over( ORDER BY `_keyword_score` DESC) as `_keyword_rank` FROM (SELECT /*+ opt_param('hidden_column_visible', 'true') */`__pk_increment`, `id`, `title`, `source`, `chunk_index`, `body`, `emb`, `updated_at`, match(`body`) against('reciprocal rank fusion' in natural language mode) as `_keyword_score` FROM `papercompass`.`paper_doc` WHERE match(`body`) against('reciprocal rank fusion' in natural language mode) ORDER BY `_keyword_score` DESC LIMIT 1000)) `_fts` full join (SELECT *, RANK() over( ORDER BY `_semantic_score` DESC) as `_semantic_rank` FROM (SELECT /*+ opt_param('hidden_column_visible', 'true') */cosine_distance(`emb`, '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.57735, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.57735, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.57735, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]') as `_distance`, `__pk_increment`, `id`, `title`, `source`, `chunk_index`, `body`, `emb`, `updated_at`, round(1 - cosine_distance(`emb`, '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.57735, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.57735, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.57735, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]') / 2, 8) as `_semantic_score` FROM `papercompass`.`paper_doc` ORDER BY `_distance` APPROXIMATE LIMIT 10)) `_vs` on `_fts`.`__pk_increment` = `_vs`.`__pk_increment`) ORDER BY `_score` DESC, ifnull(`_vs`.`__pk_increment`, `_fts`.`__pk_increment`) LIMIT 5",
+      "hits": [
+        {
+          "id": "03-hybrid-retrieval-notes.md::0::b71c485c",
+          "title": "Reading Notes on Hybrid Retrieval",
+          "source": "03-hybrid-retrieval-notes.md",
+          "chunkIndex": 0,
+          "snippet": "Hybrid retrieval combines a lexical branch with a semantic branch and fuses the two rankings. Reciprocal Rank Fusion is the usual choice because it only consumes ranks, not raw scores, so the two branches do not need calibration.",
+          "hitBy": "both",
+          "rrfScore": 0.0328,
+          "vecRank": 1,
+          "ftRank": 1
+        },
+        {
+          "id": "01-向量检索基础.md::0::84ff3cff",
+          "title": "向量检索基础笔记",
+          "source": "01-向量检索基础.md",
+          "chunkIndex": 0,
+          "snippet": "混合检索是把「关键词检索」和「语义检索」两路结果合并排序。最常见的融合方式是 RRF（Reciprocal Rank Fusion）：对每一路结果按名次算分，公式是 1/(k + rank)，k 通常取 60，然后把两路分数相加再排序。 RRF 的好处是不用归一化两边的原始分数。BM25 分数和余弦相似度量纲完全不同，直接加权很脆，RRF 只用名次，鲁棒得多。 HNSW 是一种近似最近邻图索引。查询时从入口点出发，沿着「离查询更近的邻居」贪心下降，最后得到近似的 top-k。它的召回率与搜索速度由 ef_construction 和 ef_search 两个参数控制。",
+          "hitBy": "both",
+          "rrfScore": 0.032,
+          "vecRank": 3,
+          "ftRank": 2
+        },
+        {
+          "id": "01-向量检索基础.md::1::83ff3b6c",
+          "title": "向量检索基础笔记",
+          "source": "01-向量检索基础.md",
+          "chunkIndex": 1,
+          "snippet": "文档切块会显著影响检索质量。块太大，噪声多；块太小，上下文断裂，命中了也看不懂。常见做法是按自然段切，再加一点重叠。",
+          "hitBy": "vector",
+          "rrfScore": 0.0161,
+          "vecRank": 2,
+          "ftRank": null
+        },
+        {
+          "id": "02-文献阅读与笔记方法.md::0::7c73637b",
+          "title": "文献阅读与笔记方法",
+          "source": "02-文献阅读与笔记方法.md",
+          "chunkIndex": 0,
+          "snippet": "读论文先看摘要和结论，再看图，再回头读方法。很多时间花在读引言上，但真正决定能不能复现的是方法与实验设置。 做笔记不要抄原文，要写「这句话回答了什么问题」。抄原文的笔记在检索时很难命中，因为查询词和作者用词不一致。 一个可复用的笔记模板：问题 / 方法 / 数据 / 结论 / 我的疑问 / 与哪篇论文冲突。最后一项最容易忽略，但它是综述写作的抓手。 复习要主动。看完当天写三句话概括，隔三天再写一次，一周后再写一次。这个间隔重复的节奏对长期记忆的留存率提升很明显。",
+          "hitBy": "vector",
+          "rrfScore": 0.0156,
+          "vecRank": 4,
+          "ftRank": null
+        },
+        {
+          "id": "03-hybrid-retrieval-notes.md::1::b81c49ef",
+          "title": "Reading Notes on Hybrid Retrieval",
+          "source": "03-hybrid-retrieval-notes.md",
+          "chunkIndex": 1,
+          "snippet": "Full text search with an inverted index is unbeatable for rare identifiers such as error codes or author names. Dense vectors are weak on those but strong on paraphrases. That asymmetry is exactly why hybrid retrieval beats either branch alone.",
+          "hitBy": "vector",
+          "rrfScore": 0.0156,
+          "vecRank": 4,
+          "ftRank": null
+        }
+      ]
+    },
+    {
+      "query": "复习笔记应该怎么写",
+      "note": "学习场景",
+      "mode": "native",
+      "sql": "SELECT ifnull(`_fts`.`id`, `_vs`.`id`) as `id`, ifnull(`_fts`.`title`, `_vs`.`title`) as `title`, ifnull(`_fts`.`source`, `_vs`.`source`) as `source`, ifnull(`_fts`.`chunk_index`, `_vs`.`chunk_index`) as `chunk_index`, ifnull(`_fts`.`body`, `_vs`.`body`) as `body`, ifnull(`_fts`.`emb`, `_vs`.`emb`) as `emb`, ifnull(`_fts`.`updated_at`, `_vs`.`updated_at`) as `updated_at`, (ifnull(1 / (`_fts`.`_keyword_rank` + 60), 0) + ifnull(1 / (`_vs`.`_semantic_rank` + 60), 0)) as `_score`, _fts._keyword_rank as ft_rank, _vs._semantic_rank as vec_rank FROM ((SELECT *, RANK() over( ORDER BY `_keyword_score` DESC) as `_keyword_rank` FROM (SELECT /*+ opt_param('hidden_column_visible', 'true') */`__pk_increment`, `id`, `title`, `source`, `chunk_index`, `body`, `emb`, `updated_at`, match(`body`) against('复习笔记应该怎么写' in natural language mode) as `_keyword_score` FROM `papercompass`.`paper_doc` WHERE match(`body`) against('复习笔记应该怎么写' in natural language mode) ORDER BY `_keyword_score` DESC LIMIT 1000)) `_fts` full join (SELECT *, RANK() over( ORDER BY `_semantic_score` DESC) as `_semantic_rank` FROM (SELECT /*+ opt_param('hidden_column_visible', 'true') */cosine_distance(`emb`, '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.3285, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.131186, 0, 0, 0, 0, 0, 0, -0.131186, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.3285, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.237569, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3285, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.131186, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.131186, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3285, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.237569, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.3285, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3285, 0, 0.131186, 0, 0, 0, 0, -0.208295, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.131186, -0.131186, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.275308, 0, 0, 0, 0, 0, 0, 0, 0]') as `_distance`, `__pk_increment`, `id`, `title`, `source`, `chunk_index`, `body`, `emb`, `updated_at`, round(1 - cosine_distance(`emb`, '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.3285, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.131186, 0, 0, 0, 0, 0, 0, -0.131186, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.3285, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.237569, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3285, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.131186, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.131186, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3285, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.237569, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.3285, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3285, 0, 0.131186, 0, 0, 0, 0, -0.208295, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.131186, -0.131186, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.275308, 0, 0, 0, 0, 0, 0, 0, 0]') / 2, 8) as `_semantic_score` FROM `papercompass`.`paper_doc` ORDER BY `_distance` APPROXIMATE LIMIT 10)) `_vs` on `_fts`.`__pk_increment` = `_vs`.`__pk_increment`) ORDER BY `_score` DESC, ifnull(`_vs`.`__pk_increment`, `_fts`.`__pk_increment`) LIMIT 5",
+      "hits": [
+        {
+          "id": "02-文献阅读与笔记方法.md::0::7c73637b",
+          "title": "文献阅读与笔记方法",
+          "source": "02-文献阅读与笔记方法.md",
+          "chunkIndex": 0,
+          "snippet": "读论文先看摘要和结论，再看图，再回头读方法。很多时间花在读引言上，但真正决定能不能复现的是方法与实验设置。 做笔记不要抄原文，要写「这句话回答了什么问题」。抄原文的笔记在检索时很难命中，因为查询词和作者用词不一致。 一个可复用的笔记模板：问题 / 方法 / 数据 / 结论 / 我的疑问 / 与哪篇论文冲突。最后一项最容易忽略，但它是综述写作的抓手。 复习要主动。看完当天写三句话概括，隔三天再写一次，一周后再写一次。这个间隔重复的节奏对长期记忆的留存率提升很明显。",
+          "hitBy": "both",
+          "rrfScore": 0.0328,
+          "vecRank": 1,
+          "ftRank": 1
+        },
+        {
+          "id": "selftest-sample.md::0::af6ca140",
+          "title": "实验记录：HNSW 参数怎么调",
+          "source": "selftest-sample.md",
+          "chunkIndex": 0,
+          "snippet": "# 实验记录：HNSW 参数怎么调 在 10 万条 768 维向量上，ef_construction=200、ef_search=64 时，Recall@10 稳定在 0.95 左右，P99 延迟 18 毫秒。ef_search 调到 128 之后 Recall 只涨了 0.01，延迟却翻倍。 结论是：先调 ef_search 性价比最高，达到收益拐点后再调 ef_construction。",
+          "hitBy": "both",
+          "rrfScore": 0.0323,
+          "vecRank": 2,
+          "ftRank": 2
+        },
+        {
+          "id": "01-向量检索基础.md::1::83ff3b6c",
+          "title": "向量检索基础笔记",
+          "source": "01-向量检索基础.md",
+          "chunkIndex": 1,
+          "snippet": "文档切块会显著影响检索质量。块太大，噪声多；块太小，上下文断裂，命中了也看不懂。常见做法是按自然段切，再加一点重叠。",
+          "hitBy": "vector",
+          "rrfScore": 0.0159,
+          "vecRank": 3,
+          "ftRank": null
+        },
+        {
+          "id": "01-向量检索基础.md::0::84ff3cff",
+          "title": "向量检索基础笔记",
+          "source": "01-向量检索基础.md",
+          "chunkIndex": 0,
+          "snippet": "混合检索是把「关键词检索」和「语义检索」两路结果合并排序。最常见的融合方式是 RRF（Reciprocal Rank Fusion）：对每一路结果按名次算分，公式是 1/(k + rank)，k 通常取 60，然后把两路分数相加再排序。 RRF 的好处是不用归一化两边的原始分数。BM25 分数和余弦相似度量纲完全不同，直接加权很脆，RRF 只用名次，鲁棒得多。 HNSW 是一种近似最近邻图索引。查询时从入口点出发，沿着「离查询更近的邻居」贪心下降，最后得到近似的 top-k。它的召回率与搜索速度由 ef_construction 和 ef_search 两个参数控制。",
+          "hitBy": "vector",
+          "rrfScore": 0.0156,
+          "vecRank": 4,
+          "ftRank": null
+        },
+        {
+          "id": "03-hybrid-retrieval-notes.md::2::b91c4b82",
+          "title": "Reading Notes on Hybrid Retrieval",
+          "source": "03-hybrid-retrieval-notes.md",
+          "chunkIndex": 2,
+          "snippet": "Latency matters: the lexical branch usually costs single digit milliseconds while an approximate nearest neighbour scan over millions of vectors costs tens of milliseconds. Running both in parallel keeps the tail latency close to the slower branch.",
+          "hitBy": "vector",
+          "rrfScore": 0.0154,
+          "vecRank": 5,
+          "ftRank": null
+        }
+      ]
+    }
+  ]
+}

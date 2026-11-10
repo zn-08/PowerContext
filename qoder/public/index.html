@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>文献罗盘 PaperCompass · seekdb 混合检索与复习记忆台</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">🧭</span>
+        <div>
+          <h1>文献罗盘 PaperCompass</h1>
+          <p class="sub">资料进来 · 混合检索 · 复习记忆 —— 检索与记忆全部落在 seekdb 里</p>
+        </div>
+      </div>
+      <div class="status" id="status">连接中…</div>
+    </header>
+
+    <main>
+      <section class="panel">
+        <h2>① 检索</h2>
+        <div class="row">
+          <input id="query" type="search" placeholder="用一句话问：混合检索怎么融合两路结果？" />
+          <select id="mode" title="混合检索路径">
+            <option value="native">native（数据库生成混合检索 SQL）</option>
+            <option value="sql">sql（单条 RRF SQL）</option>
+          </select>
+          <button id="search-btn" class="primary">检索</button>
+        </div>
+        <p class="hint">
+          全文走 <code>FULLTEXT(ik)</code> 索引，向量走 <code>VECTOR(HNSW, cosine)</code> 索引，
+          RRF 融合由数据库完成（<code>DBMS_HYBRID_SEARCH</code>）。
+        </p>
+        <div id="results" class="results"></div>
+        <details id="sql-box" class="sql-box" hidden>
+          <summary>本次执行的 SQL（融合在库内完成）</summary>
+          <pre id="sql"></pre>
+        </details>
+      </section>
+
+      <div class="two-col">
+        <section class="panel">
+          <h2>② 导入资料</h2>
+          <div class="stack">
+            <input id="doc-title" type="text" placeholder="标题，例如：向量检索基础笔记" />
+            <input id="doc-source" type="text" placeholder="来源标识，例如：my-notes/vec.md" />
+            <textarea id="doc-text" rows="7" placeholder="粘贴 Markdown 或纯文本，按段落自动切块后写入 seekdb"></textarea>
+            <button id="ingest-btn">导入到 seekdb</button>
+          </div>
+          <div id="ingest-result" class="result-note"></div>
+        </section>
+
+        <section class="panel">
+          <h2>③ 复习记忆</h2>
+          <p class="hint">检索足迹与复习计划都存在 seekdb 的 <code>paper_study</code> / <code>paper_review</code> 表里。</p>
+          <div class="row">
+            <input id="user" type="text" value="demo" placeholder="用户标识" />
+            <button id="due-btn">看今天该复习的</button>
+          </div>
+          <div id="due-list" class="results"></div>
+        </section>
+      </div>
+    </main>
+
+    <footer>
+      <p>Qoder × OceanBase 赛题作品 · 数据层：seekdb（全文索引 + 向量索引 + 混合检索 + 记忆表）</p>
+    </footer>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

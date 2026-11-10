@@ -1,0 +1,20 @@
+{
+  "name": "papercompass",
+  "version": "1.0.0",
+  "private": true,
+  "description": "文献罗盘 PaperCompass · 基于 seekdb 的混合检索与复习记忆台（Qoder 赛题）",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "setup-db": "node scripts/setup-db.js",
+    "selftest": "node scripts/selftest.js",
+    "build-site": "node scripts/build-site.js"
+  },
+  "dependencies": {
+    "mysql2": "^3.11.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

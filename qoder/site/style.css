@@ -1,0 +1,133 @@
+:root {
+  --bg: #0d1220;
+  --panel: #151b2b;
+  --line: #26304a;
+  --text: #e9edf7;
+  --muted: #93a0bf;
+  --accent: #4da3ff;
+  --ok: #3ddc97;
+  --warn: #ffc857;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", Roboto, sans-serif;
+  line-height: 1.7;
+}
+
+.hero {
+  padding: 64px 24px 52px;
+  text-align: center;
+  background:
+    radial-gradient(1000px 380px at 50% -120px, rgba(77, 163, 255, 0.25), transparent 70%),
+    linear-gradient(180deg, #131a2b, #0d1220);
+  border-bottom: 1px solid var(--line);
+}
+.eyebrow { color: var(--accent); letter-spacing: 2px; font-size: 13px; margin: 0 0 10px; }
+.hero h1 { margin: 0; font-size: 42px; letter-spacing: 1px; }
+.hero h1 .en { color: var(--muted); font-size: 26px; font-weight: 400; }
+.lead { max-width: 760px; margin: 18px auto 0; color: #c8d2ea; font-size: 16px; }
+.tags { margin: 22px 0 0; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.links { margin-top: 26px; display: flex; gap: 12px; justify-content: center; }
+
+.tag {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: #101626;
+}
+.tag.both { color: var(--ok); border-color: #21563f; }
+.tag.fulltext { color: var(--warn); border-color: #5a4a1c; }
+.tag.vector { color: var(--accent); border-color: #1e4066; }
+
+.btn {
+  display: inline-block;
+  padding: 10px 20px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #06121f;
+  font-weight: 600;
+  text-decoration: none;
+}
+.btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+
+main { max-width: 1040px; margin: 0 auto; padding: 20px 20px 60px; }
+
+.block { padding: 34px 0; border-bottom: 1px solid var(--line); }
+.block:last-child { border-bottom: none; }
+.block h2 { font-size: 21px; margin: 0 0 18px; color: var(--accent); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.card h3 { margin: 0 0 8px; font-size: 15px; }
+.card p { margin: 0; color: #c3cde5; font-size: 14px; }
+
+.note { color: var(--muted); font-size: 14px; }
+.muted { color: var(--muted); }
+
+.demo-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.demo-btn {
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: #101626;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+.demo-btn.active { background: var(--accent); color: #06121f; border-color: var(--accent); font-weight: 600; }
+
+.demo-out { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+.demo-q { font-weight: 600; margin: 0 0 12px; }
+
+.hit { border-top: 1px solid var(--line); padding: 12px 0; }
+.hit:first-of-type { border-top: none; }
+.hit-head { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.hit-title { font-weight: 600; }
+.hit-body { margin: 8px 0 0; color: #c3cde5; font-size: 14px; }
+
+.sql { margin-top: 10px; }
+.sql summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.sql pre {
+  background: #0a0e17;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  overflow: auto;
+  max-height: 300px;
+  font-size: 12px;
+  color: #b9c6e4;
+}
+
+.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tbl th, .tbl td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+.tbl th { background: #131a2b; color: var(--muted); font-weight: 600; }
+
+.code {
+  background: #0a0e17;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  overflow: auto;
+  font-size: 13px;
+  color: #b9c6e4;
+}
+
+.plain { color: #c3cde5; font-size: 14px; }
+code { background: #0c111c; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+
+footer { text-align: center; color: var(--muted); font-size: 13px; padding: 26px 16px 40px; }
+footer .small { font-size: 12px; }
+a { color: var(--accent); }
