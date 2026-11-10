@@ -1,0 +1,3 @@
+database npc_memory_demo: lore rows=6, memory rows=1
+  full-text hit: keyword=kettle title_zh=会唱歌的茶壶 relevance=0.9656832990157346
+  full-text hit: keyword=lobster title_zh=龙虾节 relevance=0.43686846715698047

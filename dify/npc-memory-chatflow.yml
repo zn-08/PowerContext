@@ -10,14 +10,6 @@ kind: app
 version: 0.5.0
 workflow:
   conversation_variables: []
-  environment_variables:
-  - description: 记忆服务的基地址，导入后请改成你自己的地址
-    id: SERVICE_BASE_URL
-    name: SERVICE_BASE_URL
-    selector:
-    - env
-    - SERVICE_BASE_URL
-    value: http://127.0.0.1:8808
   features:
     file_upload:
       allowed_file_extensions:
@@ -146,24 +138,35 @@ workflow:
           config: null
           type: no-auth
         body:
-          data: []
-          type: none
+          data:
+          - id: body-session
+            key: session_id
+            type: text
+            value: '{{#start.session_id#}}'
+          - id: body-query
+            key: query
+            type: text
+            value: '{{#start.player_input#}}'
+          type: json
         desc: 向记忆服务取回这个玩家的过往记忆，并用全文索引检索相关设定
-        headers: ''
-        method: get
-        params: 'session={{#start.session_id#}}&query={{#start.player_input#}}'
+        error_strategy:
+          default_value: '{"session_id": "", "query": "", "memory": [], "lore": []}'
+          type: default_value
+        headers: 'Content-Type:application/json'
+        method: post
+        params: ''
         retry_config:
           max_retries: 3
           retry_enabled: true
           retry_interval: 100
         selected: false
         timeout:
-          max_connect_timeout: 0
-          max_read_timeout: 0
-          max_write_timeout: 0
+          max_connect_timeout: 10
+          max_read_timeout: 30
+          max_write_timeout: 30
         title: 读取记忆与设定
         type: http-request
-        url: '{{#env.SERVICE_BASE_URL#}}/context'
+        url: 'http://127.0.0.1:8808/context'
         variables: []
       height: 136
       id: ctx
@@ -203,7 +206,7 @@ workflow:
           retry_interval: 1000
         error_strategy:
           type: default_value
-          default_value: ''
+          default_value: '（掌柜一时没接上话，账本先空着。你再说一遍？）'
         prompt_template:
         - id: sys-1
           role: system
@@ -264,6 +267,9 @@ workflow:
             value: '{{#llm.text#}}'
           type: json
         desc: 把这一轮写回 seekdb 的记忆表
+        error_strategy:
+          default_value: '{"ok": false, "skipped": true}'
+          type: default_value
         headers: 'Content-Type:application/json'
         method: post
         params: ''
@@ -273,12 +279,12 @@ workflow:
           retry_interval: 100
         selected: false
         timeout:
-          max_connect_timeout: 0
-          max_read_timeout: 0
-          max_write_timeout: 0
+          max_connect_timeout: 10
+          max_read_timeout: 30
+          max_write_timeout: 30
         title: 写回记忆
         type: http-request
-        url: '{{#env.SERVICE_BASE_URL#}}/memory'
+        url: 'http://127.0.0.1:8808/memory'
         variables: []
       height: 136
       id: mem

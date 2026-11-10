@@ -1,9 +1,11 @@
 # Dify 记忆服务 · 验证样例实测记录
 
-- 执行时间：2026-11-10
+- 执行时间：2026-11-11
 - seekdb：`127.0.0.1:2881`，数据库 `npc_memory_demo`
 - 记忆服务：`http://127.0.0.1:8808`
-- 命令行与返回均为真实执行结果（未做任何改写）
+- 复现脚本：`dify/verify_samples.py`（本文件所有输出都是它跑出来的原始结果，未做任何改写；
+  控制台原始输出见 [`verification-console.log`](verification-console.log)）
+- **下面两个请求就是 Dify 工作流里两个 HTTP Request 节点发出的请求**（`POST` + JSON body）
 
 ## 0. 环境与健康检查
 
@@ -14,8 +16,11 @@ $ curl http://127.0.0.1:8808/health
 
 ## 1. 样例一：第一次来，掌柜还不认识你
 
+工作流输入：玩家标识 `player-utf8`，玩家这次说了「我把房东的茶壶藏起来了」。
+
 ```
-$ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=我把房东的茶壶藏起来了'
+$ curl -X POST http://127.0.0.1:8808/context -H 'Content-Type: application/json' \
+    -d '{"session_id":"player-utf8","query":"我把房东的茶壶藏起来了"}'
 {
   "session_id": "player-utf8",
   "query": "我把房东的茶壶藏起来了",
@@ -52,7 +57,8 @@ $ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=我把房东的�
 }
 ```
 
-> 第一次对话没有任何历史，掌柜不会凭空提起账本。
+> 第一次对话没有任何历史，掌柜不会凭空提起账本；
+> 但他**已经能引用设定**——中文提问被 `ik` 分词后命中了中文设定列。
 
 ## 2. 记忆写入（seekdb 落库）
 
@@ -65,8 +71,11 @@ $ curl -X POST http://127.0.0.1:8808/memory -H 'Content-Type: application/json' 
 
 ## 3. 样例二：同一个玩家再来，掌柜翻旧账并引用世界设定
 
+工作流输入：玩家标识 `player-utf8`，玩家这次说了「我要再藏一次茶壶」。
+
 ```
-$ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=我要再藏一次茶壶'
+$ curl -X POST http://127.0.0.1:8808/context -H 'Content-Type: application/json' \
+    -d '{"session_id":"player-utf8","query":"我要再藏一次茶壶"}'
 {
   "session_id": "player-utf8",
   "query": "我要再藏一次茶壶",
@@ -75,7 +84,7 @@ $ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=我要再藏一�
       "turn_no": 1,
       "player_input": "我把房东的茶壶藏起来了",
       "npc_reply": "记下来了。茶壶，失踪，暂记在玩家名下。",
-      "created_at": "2026-11-10 21:09:01"
+      "created_at": "2026-11-11 00:44:46"
     }
   ],
   "lore": [
@@ -98,43 +107,65 @@ $ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=我要再藏一�
 ## 4. 样例三：换个话题，全文索引照样捞得到设定
 
 ```
-$ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=龙虾节的配方到底怎么写'
-[
-  {
-    "id": 2,
-    "keyword": "lobster",
-    "title": "lobster festival",
-    "body": "Once a year the villagers cook a lobster the size of a rowing boat in the square. The recipe is a state secret and the last cook vanished mid-recipe.",
-    "title_zh": "龙虾节",
-    "body_zh": "一年一度，镇上要在广场烤一只赛龙舟那么大的龙虾。配方是镇上的秘密，上一位厨子失踪在配方写到一半的时候。",
-    "relevance": 1.3267671675808472
-  },
-  {
-    "id": 1,
-    "keyword": "lamp",
-    "title": "moon lamp",
-    "body": "The moon lamp hangs above the tavern door and only lights up when someone says a word that rhymes with 'lobster'. The keeper claims it is broken.",
-    "title_zh": "月灯",
-    "body_zh": "酒馆门上的月灯，只在有人念出跟『龙虾』押韵的词时才会亮。掌柜嘴上说它是坏的。",
-    "relevance": 0.18965517241379312
-  },
-  {
-    "id": 6,
-    "keyword": "kettle",
-    "title": "the singing kettle",
-    "body": "The kettle sings only when the fire is fed with old letters. The tune it sings is always the one the writer wanted to send but never did.",
-    "title_zh": "会唱歌的茶壶",
-    "body_zh": "茶壶只有在用旧信纸烧火时才会唱歌，唱的总是写信人想送出去却一直没送的那支曲子。",
-    "relevance": 0.18581081081081086
-  }
-]
+$ curl -X POST http://127.0.0.1:8808/context -H 'Content-Type: application/json' \
+    -d '{"session_id":"player-utf8","query":"龙虾节的配方到底怎么写"}'
+{
+  "session_id": "player-utf8",
+  "query": "龙虾节的配方到底怎么写",
+  "memory": [
+    {
+      "turn_no": 1,
+      "player_input": "我把房东的茶壶藏起来了",
+      "npc_reply": "记下来了。茶壶，失踪，暂记在玩家名下。",
+      "created_at": "2026-11-11 00:44:46"
+    }
+  ],
+  "lore": [
+    {
+      "id": 2,
+      "keyword": "lobster",
+      "title": "lobster festival",
+      "body": "Once a year the villagers cook a lobster the size of a rowing boat in the square. The recipe is a state secret and the last cook vanished mid-recipe.",
+      "title_zh": "龙虾节",
+      "body_zh": "一年一度，镇上要在广场烤一只赛龙舟那么大的龙虾。配方是镇上的秘密，上一位厨子失踪在配方写到一半的时候。",
+      "relevance": 1.3267671675808472
+    },
+    {
+      "id": 1,
+      "keyword": "lamp",
+      "title": "moon lamp",
+      "body": "The moon lamp hangs above the tavern door and only lights up when someone says a word that rhymes with 'lobster'. The keeper claims it is broken.",
+      "title_zh": "月灯",
+      "body_zh": "酒馆门上的月灯，只在有人念出跟『龙虾』押韵的词时才会亮。掌柜嘴上说它是坏的。",
+      "relevance": 0.18965517241379312
+    },
+    {
+      "id": 6,
+      "keyword": "kettle",
+      "title": "the singing kettle",
+      "body": "The kettle sings only when the fire is fed with old letters. The tune it sings is always the one the writer wanted to send but never did.",
+      "title_zh": "会唱歌的茶壶",
+      "body_zh": "茶壶只有在用旧信纸烧火时才会唱歌，唱的总是写信人想送出去却一直没送的那支曲子。",
+      "relevance": 0.18581081081081086
+    }
+  ]
+}
 ```
 
-## 5. 跨会话记忆：换个 session 就没有历史
+## 5. 特殊字符不会把请求拼坏
+
+玩家说的话里带 `&`、`=`、`#` 和空格时，用 `POST` + JSON body 依然完整送达
+（如果把参数拼在 URL 查询串上，这里会被截断）：
 
 ```
-$ curl 'http://127.0.0.1:8808/context?session=player-other&query=我要再藏一次茶壶'
-{"memory": []}
+$ curl -X POST http://127.0.0.1:8808/context -H 'Content-Type: application/json' \
+    -d '{"session_id":"player-utf8","query":"a & b = c #d 空格也要能过"}'
+{
+  "session_id": "player-utf8",
+  "query": "a & b = c #d 空格也要能过",
+  "memory": [ ... ],
+  "lore": [ { "id": 5, "keyword": "memory", ... }, ... ]
+}
 ```
 
 ## 6. 直接在 seekdb 上核对
@@ -170,9 +201,21 @@ SELECT keyword, title_zh, MATCH(title, body, title_zh, body_zh, tags) AGAINST ('
   kettle | 会唱歌的茶壶 | 0.18581081081081086
 ```
 
-## 7. 结论
+## 7. 记忆服务实际执行的 SQL
+
+记忆服务把每条实际执行的语句打进日志（`evidence/service-run.err.log`），例如：
+
+```
+2026-11-11 00:44:46,743 INFO insert query: INSERT INTO npc_memory (session_id, turn_no, player_input, npc_reply, created_at) SELECT %s, COALESCE(MAX(turn_no), 0) + 1, %s, %s, NOW() FROM npc_memory WHERE session_id = %s
+2026-11-11 00:44:46,673 INFO turns query: SELECT turn_no, player_input, npc_reply, created_at FROM npc_memory WHERE session_id = %s ORDER BY turn_no DESC LIMIT %s
+2026-11-11 00:44:46,687 INFO lore query: SELECT id, keyword, title, body, title_zh, body_zh, MATCH(title, body, title_zh, body_zh, tags) AGAINST (%s) AS relevance FROM npc_lore WHERE MATCH(title, body, title_zh, body_zh, tags) AGAINST (%s) ORDER BY relevance DESC LIMIT %s
+```
+
+## 8. 结论
 
 - 记忆按 `session_id` 落 seekdb 表 `npc_memory`，跨会话可复用；
-- 世界设定落 `npc_lore`，带**原生全文索引**，检索走 `MATCH(title, body) AGAINST (...)`；
+- 世界设定落 `npc_lore`，带**原生全文索引**，检索走 `MATCH(title, body, title_zh, body_zh, tags) AGAINST (...)`；
 - Dify Chatflow 通过两个 HTTP Request 节点调用本服务（取上下文 / 写回记忆），
-  模型只负责按资料说话，不负责检索。
+  模型只负责按资料说话，不负责检索；
+- 两个 HTTP 节点都用 `POST` + JSON body，并各自带 `default_value` 降级，
+  记忆服务不可达时工作流不会中断。

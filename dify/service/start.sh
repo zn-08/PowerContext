@@ -2,7 +2,7 @@
 # Start the memory service of the "npc-memory-chatflow" Dify application.
 #
 # It installs the single dependency, seeds the demo database and then serves
-# the two endpoints the workflow calls: GET /context and POST /memory.
+# the two endpoints the workflow calls: POST /context and POST /memory.
 #
 # Every setting can be overridden with an environment variable; the defaults
 # match a seekdb that listens on 127.0.0.1:2881 with the root account and an
@@ -27,5 +27,5 @@ command -v "$PYTHON" >/dev/null 2>&1 || PYTHON=python
 echo "[npc] seeding ${SEEKDB_DATABASE} on ${SEEKDB_HOST}:${SEEKDB_PORT} ..."
 "$PYTHON" seed.py
 
-echo "[npc] serving on http://${SERVICE_HOST}:${SERVICE_PORT} (SERVICE_BASE_URL for Dify)"
+echo "[npc] serving on http://${SERVICE_HOST}:${SERVICE_PORT} (this is the address baked into the DSL)"
 exec "$PYTHON" app.py

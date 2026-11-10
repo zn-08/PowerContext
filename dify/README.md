@@ -43,6 +43,8 @@ dify/
 ├── README.md                              本文件（运行说明）
 ├── npc-memory-chatflow.yml                Dify Chatflow 导出，DSL version 0.5.0（Dify ≥ 1.12 用这个）
 ├── npc-memory-chatflow-legacy.yml         同一份工作流，DSL version 0.1.5（老版本 Dify 导入报版本不支持时改用这个）
+├── check_dsl.py                           DSL 自检：解析 YAML，检查图连通、模板引用、每个节点的降级策略
+├── verify_samples.py                      验证样例脚本：照着工作流发同样的两个 POST 请求
 ├── service/
 │   ├── app.py                             记忆服务：读记忆 / 全文检索设定 / 写回记忆
 │   ├── seed.py                            建库建表 + 灌入世界设定与样例记忆
@@ -51,8 +53,21 @@ dify/
 └── evidence/
     ├── verification.md                    验证样例的**真实执行记录**（命令行 + 返回值 + SQL 核对）
     ├── verification-console.log           生成上述记录时的控制台输出
+    ├── seed-console.log                   seed.py 的控制台输出
     └── service-run.err.log                记忆服务运行日志（含每条实际执行的 SQL）
 ```
+
+### 自检
+
+```bash
+python dify/check_dsl.py dify/npc-memory-chatflow.yml     # 期望输出：OK: no problems found
+python dify/check_dsl.py dify/npc-memory-chatflow-legacy.yml
+```
+
+`check_dsl.py` 会检查：YAML 能解析、只有一个 start 与一个 answer、所有节点从 start 可达、
+所有 `{{#...#}}` 模板引用都有对应变量、**没有任何 `env.` 引用**、并且每个可能失败的节点
+（两个 HTTP 节点与 LLM 节点）都带 `error_strategy.default_value`——保证主流程不会因为
+外部依赖失败而中断。
 
 ### DSL 文件的用途与导入顺序
 
@@ -63,7 +78,12 @@ dify/
 | `npc-memory-chatflow.yml` | `0.5.0` | Dify ≥ 1.12（当前版本） | **默认用这个** |
 | `npc-memory-chatflow-legacy.yml` | `0.1.5` | 更早的 Dify | 导入报「版本不支持 / app version is too high」时改用这个 |
 
+两个文件是**同一份工作流的两个 DSL 版本**（节点、连线、提示词完全一致，只有 `version:` 一行不同），
+不是两个应用，**只导入其中一个**。
+
 导入顺序：先按第五节把 **seekdb + 记忆服务**跑起来，再导入 DSL，再按 4.2 绑定模型，最后发布应用。
+**导入后不需要设置任何环境变量**：两个 HTTP 节点把记忆服务地址写成了 `http://127.0.0.1:8808`，
+与 `service/start.sh` 的默认监听地址一致。
 
 ## 四、运行环境
 
@@ -76,6 +96,9 @@ dify/
 
 > 模型插件不在 DSL 里打包（DSL 不含任何凭据）。导入后若掌柜节点显示「模型不可用」，
 > 在该节点右上角选择你自己的模型即可，其余节点无需改动。
+>
+> **流程不会因为外部依赖失败而中断**：三个节点都带降级策略（见第八节），
+> 记忆服务不可达或模型调用失败时，掌柜照样给出回复，只是资料为空。
 
 ## 五、完整运行步骤
 
@@ -145,8 +168,10 @@ curl http://127.0.0.1:8808/health
 
 1. Dify 控制台 → 「工作室」→ 「导入 DSL」→ 上传 **`npc-memory-chatflow.yml`**
    （Dify 报版本不支持时改上传 `npc-memory-chatflow-legacy.yml`；两个文件是同一个应用，不要两个都导入）。
-2. **设置环境变量** `SERVICE_BASE_URL` = 记忆服务地址（默认 `http://127.0.0.1:8808`；
-   若 Dify 与记忆服务不在同一台机器，改成可达地址，例如 `http://host.docker.internal:8808`）。
+2. **不需要设置环境变量**：DSL 里两个 HTTP 节点已经把记忆服务地址写成 `http://127.0.0.1:8808`，
+   与 `service/start.sh` 的默认监听地址一致，导入即可用。
+   （若 Dify 跑在容器里而记忆服务在宿主机，把两个节点的 `url` 改成
+   `http://host.docker.internal:8808/...` 即可；这是唯一需要改的地方。）
 3. **配置模型**：DSL 里预置了 `langgenius/openai/openai` + `gpt-4o-mini`，导入后请在「掌柜」节点里
    改成你自己有额度、且评审环境能访问的模型；模型只负责「按资料说话」，不负责检索。
    DSL 不含任何 API Key，导入后需要你在 Dify 里配置自己的模型凭据。
@@ -155,10 +180,10 @@ curl http://127.0.0.1:8808/health
    在「工作室 → 记得你所有恶作剧的掌柜 → 预览 / API」里都能直接对话；
    也可以用应用 API（`/v1/chat-messages`）按第六节的样例调用。
 
-> 两个 HTTP Request 节点分别指向 `{{#env.SERVICE_BASE_URL#}}/context` 与
-> `{{#env.SERVICE_BASE_URL#}}/memory`，换地址只需要改这一个环境变量。
-> 两个 HTTP 节点都开了 3 次重试；「掌柜」节点也带了重试与 `default_value` 兜底，
-> 模型侧偶发失败不会让整轮对话崩掉。
+> 两个 HTTP Request 节点分别指向 `http://127.0.0.1:8808/context` 与 `http://127.0.0.1:8808/memory`，
+> 都用 `POST` + JSON body（玩家说的话里有空格、`&`、`#` 也不会把 URL 拼坏）。
+> 两个 HTTP 节点各重试 3 次；失败后各自降级为一份空资料/空写入并**继续往下走**，
+> 「掌柜」节点也带了重试与 `default_value` 兜底——模型侧偶发失败也不会让整轮对话崩掉。
 
 ## 六、验证样例
 
@@ -172,7 +197,7 @@ curl http://127.0.0.1:8808/health
 - 玩家标识：`player-utf8`
 - 玩家这次说了什么：`我把房东的茶壶藏起来了`
 
-记忆服务返回（`GET /context`）：
+记忆服务返回（`POST /context`）：
 
 ```json
 {
@@ -203,7 +228,7 @@ curl http://127.0.0.1:8808/health
 - 玩家标识：`player-utf8`
 - 玩家这次说了什么：`我要再藏一次茶壶`
 
-记忆服务返回（`GET /context`，**这次带回了上一轮的记忆**）：
+记忆服务返回（`POST /context`，**这次带回了上一轮的记忆**）：
 
 ```json
 {
@@ -299,15 +324,18 @@ SELECT keyword, title_zh, MATCH(title, body, title_zh, body_zh, tags) AGAINST ('
 | seekdb 不可达 | `/health` 与 `/context` 返回 500 与错误信息；`seed.py` 报错退出 |
 | 请求路径不存在 | 返回 404 与 `{"ok": false, "error": "unknown path ..."}` |
 | 请求体不是合法 JSON | 返回 400 与错误信息 |
-| 模型侧超时 / 429 / 5xx | 「掌柜」节点重试 3 次（间隔 1s），仍失败则输出空值继续，流程不崩 |
-| 记忆服务地址不可达 | 两个 HTTP 节点各重试 3 次；对话流程仍会失败，需要按第五节把服务起起来 |
+| 模型侧超时 / 429 / 5xx | 「掌柜」节点重试 3 次（间隔 1s），仍失败则输出兜底台词继续，流程不崩 |
+| 记忆服务地址不可达 | 两个 HTTP 节点各重试 3 次；仍失败则分别降级为「空资料」与「跳过写回」，**对话流程照常走完**，掌柜仍会回话，只是没有记忆与设定可引 |
+| 玩家说的话里有空格、`&`、`#` 等特殊字符 | 两个 HTTP 节点都用 `POST` + JSON body，不拼 URL 查询串，不会被截断 |
 
 ## 九、已知限制
 
 - 记忆服务是单文件 HTTP 服务，用 Python 标准库实现，只依赖 PyMySQL，方便评审环境快速拉起；
   它**不是**生产级组件，没有鉴权与多副本部署。
-- `SERVICE_BASE_URL` 必须从 Dify 容器/实例可达；若 Dify 在容器里而记忆服务在宿主机，
-  需要用 `host.docker.internal` 或容器网络内的服务名。
+- DSL 里把记忆服务地址写死为 `http://127.0.0.1:8808`（与 `service/start.sh` 的默认监听地址一致），
+  这样导入后不需要再配环境变量。若 Dify 跑在容器里而记忆服务在宿主机，
+  把两个 HTTP 节点的 `url` 改成 `http://host.docker.internal:8808/...`（或容器网络内的服务名）即可。
+  地址不可达时流程不会中断，只会退化成「没有资料的掌柜」。
 - 记忆按 `session_id` 划分，没有做跨会话的用户身份认证——题目考察的是「上下文是否被真正复用」，
   身份属于作品自己的设计。
 - 世界设定是 6 条种子数据（中英双语），通过全文索引检索；设定更多时 `MATCH` 的召回效果会更好。

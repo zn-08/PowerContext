@@ -1,40 +1,22 @@
-# Dify ¼ÇÒä·şÎñ ¡¤ ÑéÖ¤ÑùÀıÊµ²â¼ÇÂ¼
-
-- Ö´ĞĞÊ±¼ä£º2026-11-10
-- seekdb£º`127.0.0.1:2881`£¬Êı¾İ¿â `npc_memory_demo`
-- ¼ÇÒä·şÎñ£º`http://127.0.0.1:8808`
-- ÃüÁîĞĞÓë·µ»Ø¾ùÎªÕæÊµÖ´ĞĞ½á¹û£¨Î´×öÈÎºÎ¸ÄĞ´£©
-
-## 0. »·¾³Óë½¡¿µ¼ì²é
-
-```
-$ curl http://127.0.0.1:8808/health
-{"ok": true, "seekdb": "5.7.25-OceanBase seekdb-v1.3.0.0", "database": "npc_memory_demo"}
-```
-
-## 1. ÑùÀıÒ»£ºµÚÒ»´ÎÀ´£¬ÕÆ¹ñ»¹²»ÈÏÊ¶Äã
-
-```
-$ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=ÎÒ°Ñ·¿¶«µÄ²èºø²ØÆğÀ´ÁË'
+### GET /health
+{
+  "ok": true,
+  "seekdb": "5.7.25-OceanBase seekdb-v1.3.0.0",
+  "database": "npc_memory_demo"
+}
+### POST /context  (sample 1: the keeper does not know you yet)
 {
   "session_id": "player-utf8",
-  "query": "ÎÒ°Ñ·¿¶«µÄ²èºø²ØÆğÀ´ÁË",
-  "memory": [
-    {
-      "turn_no": 1,
-      "player_input": "ÎÒ°Ñ·¿¶«µÄ²èºø²ØÆğÀ´ÁË",
-      "npc_reply": "¼ÇÏÂÀ´ÁË¡£²èºø£¬Ê§×Ù£¬Ôİ¼ÇÔÚÍæ¼ÒÃûÏÂ¡£",
-      "created_at": "2026-11-10 21:09:01"
-    }
-  ],
+  "query": "æˆ‘æŠŠæˆ¿ä¸œçš„èŒ¶å£¶è—èµ·æ¥äº†",
+  "memory": [],
   "lore": [
     {
       "id": 6,
       "keyword": "kettle",
       "title": "the singing kettle",
       "body": "The kettle sings only when the fire is fed with old letters. The tune it sings is always the one the writer wanted to send but never did.",
-      "title_zh": "»á³ª¸èµÄ²èºø",
-      "body_zh": "²èºøÖ»ÓĞÔÚÓÃ¾ÉĞÅÖ½ÉÕ»ğÊ±²Å»á³ª¸è£¬³ªµÄ×ÜÊÇĞ´ĞÅÈËÏëËÍ³öÈ¥È´Ò»Ö±Ã»ËÍµÄÄÇÖ§Çú×Ó¡£",
+      "title_zh": "ä¼šå”±æ­Œçš„èŒ¶å£¶",
+      "body_zh": "èŒ¶å£¶åªæœ‰åœ¨ç”¨æ—§ä¿¡çº¸çƒ§ç«æ—¶æ‰ä¼šå”±æ­Œï¼Œå”±çš„æ€»æ˜¯å†™ä¿¡äººæƒ³é€å‡ºå»å´ä¸€ç›´æ²¡é€çš„é‚£æ”¯æ›²å­ã€‚",
       "relevance": 0.9112987714926823
     },
     {
@@ -42,8 +24,8 @@ $ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=ÎÒ°Ñ·¿¶«µÄ²èºø²Ø
       "keyword": "tavern",
       "title": "the crooked tavern",
       "body": "The crooked tavern leans three degrees to the left, which is why the regulars always walk in circles and the landlord insists the ale is to blame.",
-      "title_zh": "Íá²±×Ó¾Æ¹İ",
-      "body_zh": "Íá²±×Ó¾Æ¹İ³¯×óÍáÈı¶È£¬ËùÒÔ³£¿Í½øÃÅ×ÜÈÆÈ¦×ß£¬·¿¶«¼á³ÖËµÊÇÂóÑ¿¾ÆµÄÎÊÌâ¡£",
+      "title_zh": "æ­ªè„–å­é…’é¦†",
+      "body_zh": "æ­ªè„–å­é…’é¦†æœå·¦æ­ªä¸‰åº¦ï¼Œæ‰€ä»¥å¸¸å®¢è¿›é—¨æ€»ç»•åœˆèµ°ï¼Œæˆ¿ä¸œåšæŒè¯´æ˜¯éº¦èŠ½é…’çš„é—®é¢˜ã€‚",
       "relevance": 0.5376060828212262
     },
     {
@@ -51,44 +33,28 @@ $ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=ÎÒ°Ñ·¿¶«µÄ²èºø²Ø
       "keyword": "lamp",
       "title": "moon lamp",
       "body": "The moon lamp hangs above the tavern door and only lights up when someone says a word that rhymes with 'lobster'. The keeper claims it is broken.",
-      "title_zh": "ÔÂµÆ",
-      "body_zh": "¾Æ¹İÃÅÉÏµÄÔÂµÆ£¬Ö»ÔÚÓĞÈËÄî³ö¸ú¡ºÁúÏº¡»ÑºÔÏµÄ´ÊÊ±²Å»áÁÁ¡£ÕÆ¹ñ×ìÉÏËµËüÊÇ»µµÄ¡£",
+      "title_zh": "æœˆç¯",
+      "body_zh": "é…’é¦†é—¨ä¸Šçš„æœˆç¯ï¼Œåªåœ¨æœ‰äººå¿µå‡ºè·Ÿã€é¾™è™¾ã€æŠ¼éŸµçš„è¯æ—¶æ‰ä¼šäº®ã€‚æŒæŸœå˜´ä¸Šè¯´å®ƒæ˜¯åçš„ã€‚",
       "relevance": 0.18965517241379312
     }
   ]
 }
-```
-
-> µÚÒ»´Î¶Ô»°Ã»ÓĞÈÎºÎÀúÊ·£¬ÕÆ¹ñ²»»áÆ¾¿ÕÌáÆğÕË±¾¡£
-
-## 2. ¼ÇÒäĞ´Èë£¨seekdb Âä¿â£©
-
-```
-$ curl -X POST http://127.0.0.1:8808/memory -H 'Content-Type: application/json' \
-    -d '{"session_id":"player-utf8","player_input":"ÎÒ°Ñ·¿¶«µÄ²èºø²ØÆğÀ´ÁË",
-         "npc_reply":"¼ÇÏÂÀ´ÁË¡£²èºø£¬Ê§×Ù£¬Ôİ¼ÇÔÚÍæ¼ÒÃûÏÂ¡£"}'
-{"ok": true, "session_id": "player-utf8", "turn_no": 2}
-```
-
-## 3. ÑùÀı¶ş£ºÍ¬Ò»¸öÍæ¼ÒÔÙÀ´£¬ÕÆ¹ñ·­¾ÉÕË²¢ÒıÓÃÊÀ½çÉè¶¨
-
-```
-$ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=ÎÒÒªÔÙ²ØÒ»´Î²èºø'
+### POST /memory  (the keeper writes this turn down)
+{
+  "ok": true,
+  "session_id": "player-utf8",
+  "turn_no": 1
+}
+### POST /context  (sample 2: the same player comes back, the keeper reads the ledger)
 {
   "session_id": "player-utf8",
-  "query": "ÎÒÒªÔÙ²ØÒ»´Î²èºø",
+  "query": "æˆ‘è¦å†è—ä¸€æ¬¡èŒ¶å£¶",
   "memory": [
     {
       "turn_no": 1,
-      "player_input": "ÎÒ°Ñ·¿¶«µÄ²èºø²ØÆğÀ´ÁË",
-      "npc_reply": "¼ÇÏÂÀ´ÁË¡£²èºø£¬Ê§×Ù£¬Ôİ¼ÇÔÚÍæ¼ÒÃûÏÂ¡£",
-      "created_at": "2026-11-10 21:09:01"
-    },
-    {
-      "turn_no": 2,
-      "player_input": "ÎÒ°Ñ·¿¶«µÄ²èºø²ØÆğÀ´ÁË",
-      "npc_reply": "¼ÇÏÂÀ´ÁË¡£²èºø£¬Ê§×Ù£¬Ôİ¼ÇÔÚÍæ¼ÒÃûÏÂ¡£",
-      "created_at": "2026-11-10 21:09:14"
+      "player_input": "æˆ‘æŠŠæˆ¿ä¸œçš„èŒ¶å£¶è—èµ·æ¥äº†",
+      "npc_reply": "è®°ä¸‹æ¥äº†ã€‚èŒ¶å£¶ï¼Œå¤±è¸ªï¼Œæš‚è®°åœ¨ç©å®¶åä¸‹ã€‚",
+      "created_at": "2026-11-11 00:44:46"
     }
   ],
   "lore": [
@@ -97,98 +63,93 @@ $ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=ÎÒÒªÔÙ²ØÒ»´Î²èºø
       "keyword": "kettle",
       "title": "the singing kettle",
       "body": "The kettle sings only when the fire is fed with old letters. The tune it sings is always the one the writer wanted to send but never did.",
-      "title_zh": "»á³ª¸èµÄ²èºø",
-      "body_zh": "²èºøÖ»ÓĞÔÚÓÃ¾ÉĞÅÖ½ÉÕ»ğÊ±²Å»á³ª¸è£¬³ªµÄ×ÜÊÇĞ´ĞÅÈËÏëËÍ³öÈ¥È´Ò»Ö±Ã»ËÍµÄÄÇÖ§Çú×Ó¡£",
+      "title_zh": "ä¼šå”±æ­Œçš„èŒ¶å£¶",
+      "body_zh": "èŒ¶å£¶åªæœ‰åœ¨ç”¨æ—§ä¿¡çº¸çƒ§ç«æ—¶æ‰ä¼šå”±æ­Œï¼Œå”±çš„æ€»æ˜¯å†™ä¿¡äººæƒ³é€å‡ºå»å´ä¸€ç›´æ²¡é€çš„é‚£æ”¯æ›²å­ã€‚",
       "relevance": 0.7254879606818715
     }
   ]
 }
-```
-
-> ÕÆ¹ñÓ¦µ±Ö¸³ö£ºÕË±¾ÉÏÒÑ¾­¼Ç×Å²èºøÕâÒ»Ìõ£¬¶øÇÒ¹æ¾ØÊÇ¼Ç¹ıµÄ¶ñ×÷¾ç²»ĞíÖØ¸´¡£
-> Ç°ÕßÀ´×Ô `memory`£¨ÉÏÒ»ÂÖ¶Ô»°£©£¬ºóÕßÀ´×Ô `lore`£¨È«ÎÄË÷Òı¼ìË÷³öµÄÉè¶¨£©¡£
-
-## 4. ÑùÀıÈı£º»»¸ö»°Ìâ£¬È«ÎÄË÷ÒıÕÕÑùÀÌµÃµ½Éè¶¨
-
-```
-$ curl 'http://127.0.0.1:8808/context?session=player-utf8&query=ÁúÏº½ÚµÄÅä·½µ½µ×ÔõÃ´Ğ´'
-[
-  {
-    "id": 2,
-    "keyword": "lobster",
-    "title": "lobster festival",
-    "body": "Once a year the villagers cook a lobster the size of a rowing boat in the square. The recipe is a state secret and the last cook vanished mid-recipe.",
-    "title_zh": "ÁúÏº½Ú",
-    "body_zh": "Ò»ÄêÒ»¶È£¬ÕòÉÏÒªÔÚ¹ã³¡¿¾Ò»Ö»ÈüÁúÖÛÄÇÃ´´óµÄÁúÏº¡£Åä·½ÊÇÕòÉÏµÄÃØÃÜ£¬ÉÏÒ»Î»³ø×ÓÊ§×ÙÔÚÅä·½Ğ´µ½Ò»°ëµÄÊ±ºò¡£",
-    "relevance": 1.3267671675808472
-  },
-  {
-    "id": 1,
-    "keyword": "lamp",
-    "title": "moon lamp",
-    "body": "The moon lamp hangs above the tavern door and only lights up when someone says a word that rhymes with 'lobster'. The keeper claims it is broken.",
-    "title_zh": "ÔÂµÆ",
-    "body_zh": "¾Æ¹İÃÅÉÏµÄÔÂµÆ£¬Ö»ÔÚÓĞÈËÄî³ö¸ú¡ºÁúÏº¡»ÑºÔÏµÄ´ÊÊ±²Å»áÁÁ¡£ÕÆ¹ñ×ìÉÏËµËüÊÇ»µµÄ¡£",
-    "relevance": 0.18965517241379312
-  },
-  {
-    "id": 6,
-    "keyword": "kettle",
-    "title": "the singing kettle",
-    "body": "The kettle sings only when the fire is fed with old letters. The tune it sings is always the one the writer wanted to send but never did.",
-    "title_zh": "»á³ª¸èµÄ²èºø",
-    "body_zh": "²èºøÖ»ÓĞÔÚÓÃ¾ÉĞÅÖ½ÉÕ»ğÊ±²Å»á³ª¸è£¬³ªµÄ×ÜÊÇĞ´ĞÅÈËÏëËÍ³öÈ¥È´Ò»Ö±Ã»ËÍµÄÄÇÖ§Çú×Ó¡£",
-    "relevance": 0.18581081081081086
-  }
-]
-```
-
-## 5. ¿ç»á»°¼ÇÒä£º»»¸ö session ¾ÍÃ»ÓĞÀúÊ·
-
-```
-$ curl 'http://127.0.0.1:8808/context?session=player-other&query=ÎÒÒªÔÙ²ØÒ»´Î²èºø'
-{"memory": []}
-```
-
-## 6. Ö±½ÓÔÚ seekdb ÉÏºË¶Ô
-
-```sql
-SELECT session_id, turn_no, player_input, npc_reply FROM npc_memory ORDER BY session_id, turn_no;
-  player-default | 1 | ÎÒ°Ñ·¿¶«µÄ²èºø²ØÆğÀ´ÁË | ¼ÇÏÂÀ´ÁË¡£·¿¶«ÒÑ¾­ÔÚÊıµÚÈı±é²èÒ¶¹Ş£¬ÕË±¾ÉÏĞ´×Å£º²èºø£¬Ê§×Ù£¬Ôİ¼ÇÔÚ·¿¶«ÃûÏÂ¡£
-  player-utf8 | 1 | ÎÒ°Ñ·¿¶«µÄ²èºø²ØÆğÀ´ÁË | ¼ÇÏÂÀ´ÁË¡£²èºø£¬Ê§×Ù£¬Ôİ¼ÇÔÚÍæ¼ÒÃûÏÂ¡£
-  player-utf8 | 2 | ÎÒ°Ñ·¿¶«µÄ²èºø²ØÆğÀ´ÁË | ¼ÇÏÂÀ´ÁË¡£²èºø£¬Ê§×Ù£¬Ôİ¼ÇÔÚÍæ¼ÒÃûÏÂ¡£
-
-SHOW INDEX FROM npc_lore;
-  npc_lore | 0 | PRIMARY | 1 | id | A | None | None | None |  | BTREE | available |  | YES | None
-  npc_lore | 1 | ft_npc_lore | 1 | title | A | None | None | None |  | FULLTEXT | available |  | YES | None
-  npc_lore | 1 | ft_npc_lore | 2 | body | A | None | None | None |  | FULLTEXT | available |  | YES | None
-  npc_lore | 1 | ft_npc_lore | 3 | title_zh | A | None | None | None |  | FULLTEXT | available |  | YES | None
-  npc_lore | 1 | ft_npc_lore | 4 | body_zh | A | None | None | None |  | FULLTEXT | available |  | YES | None
-  npc_lore | 1 | ft_npc_lore | 5 | tags | A | None | None | None |  | FULLTEXT | available |  | YES | None
-
-SELECT keyword, title_zh, MATCH(title, body, title_zh, body_zh, tags) AGAINST ('lobster kettle') AS relevance
-  FROM npc_lore
- WHERE MATCH(title, body, title_zh, body_zh, tags) AGAINST ('lobster kettle')
- ORDER BY relevance DESC LIMIT 3;
-  kettle | »á³ª¸èµÄ²èºø | 0.9656832990157346
-  lobster | ÁúÏº½Ú | 0.43686846715698047
-  lamp | ÔÂµÆ | 0.33587809422978226
-
--- ÖĞÎÄÌáÎÊÍ¬ÑùÃüÖĞÍ¬Ò»ÌõÉè¶¨£¨ik ·Ö´Ê£©£º
-SELECT keyword, title_zh, MATCH(title, body, title_zh, body_zh, tags) AGAINST ('ÁúÏº½ÚµÄÅä·½') AS relevance
-  FROM npc_lore
- WHERE MATCH(title, body, title_zh, body_zh, tags) AGAINST ('ÁúÏº½ÚµÄÅä·½')
- ORDER BY relevance DESC LIMIT 3;
-  lobster | ÁúÏº½Ú | 1.3267671675808472
-  lamp | ÔÂµÆ | 0.18965517241379312
-  kettle | »á³ª¸èµÄ²èºø | 0.18581081081081086
-```
-
-## 7. ½áÂÛ
-
-- ¼ÇÒä°´ `session_id` Âä seekdb ±í `npc_memory`£¬¿ç»á»°¿É¸´ÓÃ£»
-- ÊÀ½çÉè¶¨Âä `npc_lore`£¬´ø**Ô­ÉúÈ«ÎÄË÷Òı**£¬¼ìË÷×ß `MATCH(title, body) AGAINST (...)`£»
-- Dify Chatflow Í¨¹ıÁ½¸ö HTTP Request ½Úµãµ÷ÓÃ±¾·şÎñ£¨È¡ÉÏÏÂÎÄ / Ğ´»Ø¼ÇÒä£©£¬
-  Ä£ĞÍÖ»¸ºÔğ°´×ÊÁÏËµ»°£¬²»¸ºÔğ¼ìË÷¡£
-
-written: dify-evidence.md
+### POST /context  (sample 3: another topic, the full-text index still finds the lore)
+{
+  "session_id": "player-utf8",
+  "query": "é¾™è™¾èŠ‚çš„é…æ–¹åˆ°åº•æ€ä¹ˆå†™",
+  "memory": [
+    {
+      "turn_no": 1,
+      "player_input": "æˆ‘æŠŠæˆ¿ä¸œçš„èŒ¶å£¶è—èµ·æ¥äº†",
+      "npc_reply": "è®°ä¸‹æ¥äº†ã€‚èŒ¶å£¶ï¼Œå¤±è¸ªï¼Œæš‚è®°åœ¨ç©å®¶åä¸‹ã€‚",
+      "created_at": "2026-11-11 00:44:46"
+    }
+  ],
+  "lore": [
+    {
+      "id": 2,
+      "keyword": "lobster",
+      "title": "lobster festival",
+      "body": "Once a year the villagers cook a lobster the size of a rowing boat in the square. The recipe is a state secret and the last cook vanished mid-recipe.",
+      "title_zh": "é¾™è™¾èŠ‚",
+      "body_zh": "ä¸€å¹´ä¸€åº¦ï¼Œé•‡ä¸Šè¦åœ¨å¹¿åœºçƒ¤ä¸€åªèµ›é¾™èˆŸé‚£ä¹ˆå¤§çš„é¾™è™¾ã€‚é…æ–¹æ˜¯é•‡ä¸Šçš„ç§˜å¯†ï¼Œä¸Šä¸€ä½å¨å­å¤±è¸ªåœ¨é…æ–¹å†™åˆ°ä¸€åŠçš„æ—¶å€™ã€‚",
+      "relevance": 1.3267671675808472
+    },
+    {
+      "id": 1,
+      "keyword": "lamp",
+      "title": "moon lamp",
+      "body": "The moon lamp hangs above the tavern door and only lights up when someone says a word that rhymes with 'lobster'. The keeper claims it is broken.",
+      "title_zh": "æœˆç¯",
+      "body_zh": "é…’é¦†é—¨ä¸Šçš„æœˆç¯ï¼Œåªåœ¨æœ‰äººå¿µå‡ºè·Ÿã€é¾™è™¾ã€æŠ¼éŸµçš„è¯æ—¶æ‰ä¼šäº®ã€‚æŒæŸœå˜´ä¸Šè¯´å®ƒæ˜¯åçš„ã€‚",
+      "relevance": 0.18965517241379312
+    },
+    {
+      "id": 6,
+      "keyword": "kettle",
+      "title": "the singing kettle",
+      "body": "The kettle sings only when the fire is fed with old letters. The tune it sings is always the one the writer wanted to send but never did.",
+      "title_zh": "ä¼šå”±æ­Œçš„èŒ¶å£¶",
+      "body_zh": "èŒ¶å£¶åªæœ‰åœ¨ç”¨æ—§ä¿¡çº¸çƒ§ç«æ—¶æ‰ä¼šå”±æ­Œï¼Œå”±çš„æ€»æ˜¯å†™ä¿¡äººæƒ³é€å‡ºå»å´ä¸€ç›´æ²¡é€çš„é‚£æ”¯æ›²å­ã€‚",
+      "relevance": 0.18581081081081086
+    }
+  ]
+}
+### POST /context  (a player input that would break a query string)
+{
+  "session_id": "player-utf8",
+  "query": "a & b = c #d ç©ºæ ¼ä¹Ÿè¦èƒ½è¿‡",
+  "memory": [
+    {
+      "turn_no": 1,
+      "player_input": "æˆ‘æŠŠæˆ¿ä¸œçš„èŒ¶å£¶è—èµ·æ¥äº†",
+      "npc_reply": "è®°ä¸‹æ¥äº†ã€‚èŒ¶å£¶ï¼Œå¤±è¸ªï¼Œæš‚è®°åœ¨ç©å®¶åä¸‹ã€‚",
+      "created_at": "2026-11-11 00:44:46"
+    }
+  ],
+  "lore": [
+    {
+      "id": 5,
+      "keyword": "memory",
+      "title": "memory of the night watch",
+      "body": "The night watch remembers everything that happened under the moon lamp, and it never forgets a face. That is why the villagers trust it and fear it.",
+      "title_zh": "å¤œå·¡çš„è®°å¿†",
+      "body_zh": "å¤œå·¡è®°ç€æœˆç¯åº•ä¸‹å‘ç”Ÿè¿‡çš„æ‰€æœ‰äº‹ï¼Œä¸€å¼ è„¸ä¹Ÿä¸å¿˜ã€‚æ‰€ä»¥é•‡æ°‘æ—¢ä¿¡å®ƒï¼Œä¹Ÿæ€•å®ƒã€‚",
+      "relevance": 0.7783764671283714
+    },
+    {
+      "id": 2,
+      "keyword": "lobster",
+      "title": "lobster festival",
+      "body": "Once a year the villagers cook a lobster the size of a rowing boat in the square. The recipe is a state secret and the last cook vanished mid-recipe.",
+      "title_zh": "é¾™è™¾èŠ‚",
+      "body_zh": "ä¸€å¹´ä¸€åº¦ï¼Œé•‡ä¸Šè¦åœ¨å¹¿åœºçƒ¤ä¸€åªèµ›é¾™èˆŸé‚£ä¹ˆå¤§çš„é¾™è™¾ã€‚é…æ–¹æ˜¯é•‡ä¸Šçš„ç§˜å¯†ï¼Œä¸Šä¸€ä½å¨å­å¤±è¸ªåœ¨é…æ–¹å†™åˆ°ä¸€åŠçš„æ—¶å€™ã€‚",
+      "relevance": 0.22267206477732798
+    },
+    {
+      "id": 4,
+      "keyword": "prank",
+      "title": "the pranking ledger",
+      "body": "The inn keeps a ledger of every prank ever played. The rule is simple: never repeat a prank that has already been written down.",
+      "title_zh": "æ¶ä½œå‰§è´¦æœ¬",
+      "body_zh": "é…’é¦†æœ‰ä¸€æœ¬è´¦æœ¬ï¼Œè®°ç€æ¯ä¸ªå®¢äººå¹²è¿‡çš„æ¯ä¸€ä»¶æ¶ä½œå‰§ã€‚è§„çŸ©å¾ˆç®€å•ï¼šè®°è¿‡çš„æ¶ä½œå‰§ä¸è®¸é‡å¤ã€‚",
+      "relevance": 0.15759312320916904
+    }
+  ]
+}

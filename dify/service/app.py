@@ -203,6 +203,11 @@ class Handler(BaseHTTPRequestHandler):
             self._reply(400, {"ok": False, "error": "body is not valid JSON"})
             return
         try:
+            if parsed.path == "/context":
+                session_id = str(payload.get("session_id") or payload.get("session") or "player-default")
+                text = str(payload.get("query") or payload.get("player_input") or "")
+                self._reply(200, build_context(session_id, text))
+                return
             if parsed.path == "/memory":
                 session_id = str(payload.get("session_id") or payload.get("session") or "player-default")
                 player_input = str(payload.get("player_input") or "")
