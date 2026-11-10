@@ -58,6 +58,9 @@ _SEARCH_STEM_DISCOUNT = 0.6
 _SEARCH_COVERAGE_WEIGHT = 0.25
 _SEARCH_PROXIMITY_WEIGHT = 0.35
 _SEARCH_PROXIMITY_WINDOW = 8
+# Give a strong match for one aspect of a multi-part question room beside pages
+# with broad coverage. A small rank offset preserves the heads of both lists.
+_SEARCH_RANK_OFFSET = 5
 
 # Generic English function words carry no retrieval signal.
 _STOPWORDS = frozenset(
@@ -352,7 +355,27 @@ def _rank_candidates(
         score += _SEARCH_PROXIMITY_WEIGHT * _proximity(candidate, matched, weights)
         scored.append((score, entry_id, candidate.hit))
     scored.sort(key=lambda item: (-item[0], item[1]))
-    return [hit for _score, _entry_id, hit in scored]
+    return _fuse_aspect_ranks([hit for _score, _entry_id, hit in scored], ranks)
+
+
+def _fuse_aspect_ranks(ordered: list[Any], ranks: dict[str, dict[str, int]]) -> list[Any]:
+    """Balance overall relevance with focused evidence for individual query aspects."""
+
+    # Coverage alone favors pages mentioning many query terms over a statement
+    # containing just one requested metric. Fuse the overall ranking with each
+    # page's best individual-term rank, without summing duplicated query aspects.
+    best_ranks: dict[str, int] = {}
+    for term_ranks in ranks.values():
+        for entry_id, rank in term_ranks.items():
+            best_ranks[entry_id] = min(best_ranks.get(entry_id, rank), rank)
+    fused: list[tuple[float, int, Any]] = []
+    for rank, hit in enumerate(ordered, start=1):
+        score = 1.0 / (_SEARCH_RANK_OFFSET + rank)
+        if hit.entry_id in best_ranks:
+            score += 1.0 / (_SEARCH_RANK_OFFSET + best_ranks[hit.entry_id])
+        fused.append((score, rank, hit))
+    fused.sort(key=lambda item: (-item[0], item[1]))
+    return [hit for _score, _rank, hit in fused]
 
 
 def _matched_terms(candidate: _Candidate, terms: tuple[str, ...]) -> list[str]:
