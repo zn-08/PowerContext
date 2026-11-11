@@ -55,12 +55,32 @@ _SEARCH_MAX_TERMS = 24
 _SEARCH_BM25_K1 = 1.2
 _SEARCH_BM25_B = 0.75
 _SEARCH_STEM_DISCOUNT = 0.6
+_SEARCH_PREFIX_DISCOUNT = 0.45
+_SEARCH_PREFIX_MIN_LENGTH = 3
+_SEARCH_PREFIX_MAX_LENGTH = 8
 _SEARCH_COVERAGE_WEIGHT = 0.25
 _SEARCH_PROXIMITY_WEIGHT = 0.35
 _SEARCH_PROXIMITY_WINDOW = 8
-# Give a strong match for one aspect of a multi-part question room beside pages
-# with broad coverage. A small rank offset preserves the heads of both lists.
+# The weight of a question term that names the document of a page.  It is
+# larger than the weight of one term of the text, because a question is about
+# one document and the generic words of a question are repeated by the pages of
+# every document.
+_SEARCH_DOCUMENT_WEIGHT = 8.0
+# The page order is the fusion of three orders: the order that the offline scoring
+# gives the pages, the order that the Memory gives the pages when it searches the
+# whole question, and the best order that the Memory gives a page for one of the
+# terms of the question.  The fusion is a reciprocal rank fusion, so that one
+# order can not push a page that the other orders do not know into the result.
 _SEARCH_RANK_OFFSET = 5
+_SEARCH_OFFLINE_WEIGHT = 1.0
+_SEARCH_FULL_QUESTION_WEIGHT = 0.5
+_SEARCH_ASPECT_WEIGHT = 1.0
+# A question is about one document and it usually names it.  The pages of that
+# document are worth more than the pages of the other documents, whatever the
+# generic words of the question are worth in them.
+_SEARCH_DOCUMENT_WEIGHT = 1.0
+# How much the number of documents a term appears in counts for its weight.
+_SEARCH_DOCUMENT_RARITY_POWER = 2.0
 
 # Generic English function words carry no retrieval signal.
 _STOPWORDS = frozenset(
@@ -97,6 +117,10 @@ _FRAME_WORDS = frozenset(
     information info data numbers number values value amounts amount
     source sources document documents report reports filing filings
     please kindly help note notes
+    round rounds decimal places address addressed
+    give gives given giving line lines item items
+    usd millions quantity directly outlined explicitly
+    exclude excludes excluding excluded
     """.split()
 )
 
@@ -254,10 +278,10 @@ async def search_pdf_pages(memory: Any, question: str, limit: int = 10) -> tuple
     terms = _query_terms(question)
     if not terms:
         return ()
-    candidates, ranks = await _harvest_candidates(memory, terms, SearchMemoryRequest)
+    candidates, ranks, full_ranks = await _harvest_candidates(memory, terms, question, SearchMemoryRequest)
     if not candidates:
         return ()
-    ranked = _rank_candidates(candidates, ranks, terms)
+    ranked = _rank_candidates(candidates, ranks, terms, full_ranks)
     return tuple(
         MemoryCitation(
             memory_ref=hit.memory_ref,
@@ -277,39 +301,46 @@ class _Candidate:
     stems: Counter[str] = field(default_factory=Counter)
     tokens: tuple[str, ...] = ()
     length: int = 0
+    document: str = ""
+    header: frozenset[str] = frozenset()
+    prefixes: dict[str, int] = field(default_factory=dict)
 
 
 async def _harvest_candidates(
     memory: Any,
     terms: tuple[str, ...],
+    question: str,
     request_class: Any,
-) -> tuple[dict[str, _Candidate], dict[str, dict[str, int]]]:
+) -> tuple[dict[str, _Candidate], dict[str, dict[str, int]], dict[str, int]]:
     """Collect the pages the scoped Memory returns for one question.
 
     Each informative term is searched on its own so that the shared lexical admission
     floor stays satisfiable, and every retrieved page keeps the rank it reached for
-    the terms that matched it.
+    the terms that matched it.  The whole question is searched as well: that search
+    ranks the pages with the statistics of the whole corpus, which the offline
+    scoring over the harvested candidates can not reproduce.
     """
 
     candidates: dict[str, _Candidate] = {}
     ranks: dict[str, dict[str, int]] = {}
-    for term in terms:
-        request = request_class(query=term, limit=_SEARCH_HARVEST_LIMIT, mode="fts")
+    full_ranks: dict[str, int] = {}
+    for query in (question, *terms):
+        request = request_class(query=query, limit=_SEARCH_HARVEST_LIMIT, mode="fts")
         page = await memory.search(request)
         hits = getattr(page, "hits", ())
         if not hits:
             continue
-        term_ranks = ranks.setdefault(term, {})
+        query_ranks = full_ranks if query == question else ranks.setdefault(query, {})
         for rank, hit in enumerate(hits, start=1):
             entry_id = hit.entry_id
-            term_ranks[entry_id] = rank
+            query_ranks[entry_id] = rank
             candidate = candidates.get(entry_id)
             if candidate is None:
                 candidate = _Candidate(hit=hit)
                 candidates[entry_id] = candidate
             candidate.hit = hit
             _index_tokens(candidate, hit.text)
-    return candidates, ranks
+    return candidates, ranks, full_ranks
 
 
 def _index_tokens(candidate: _Candidate, text: str) -> None:
@@ -320,12 +351,25 @@ def _index_tokens(candidate: _Candidate, text: str) -> None:
     candidate.length = len(tokens)
     candidate.counts = Counter(tokens)
     candidate.stems = Counter(_stem(token) for token in tokens)
+    header, _, _ = text.partition("\n")
+    candidate.document = header.strip()
+    candidate.header = frozenset(_TOKEN.findall(candidate.document.casefold()))
+    # the number of occurrences of every stem that shares a prefix with the
+    # stem of a question term is looked up by the first characters of the stem
+    prefixes: dict[str, int] = {}
+    for stem, count in candidate.stems.items():
+        for size in range(_SEARCH_PREFIX_MIN_LENGTH, min(len(stem), _SEARCH_PREFIX_MAX_LENGTH) + 1):
+            key = stem[:size]
+            if count > prefixes.get(key, 0):
+                prefixes[key] = count
+    candidate.prefixes = prefixes
 
 
 def _rank_candidates(
     candidates: dict[str, _Candidate],
     ranks: dict[str, dict[str, int]],
     terms: tuple[str, ...],
+    full_ranks: dict[str, int],
 ) -> list[Any]:
     """Order the retrieved pages by how much question evidence they carry."""
 
@@ -345,37 +389,115 @@ def _rank_candidates(
             weight = weights.get(term, 0.0)
             if weight <= 0.0:
                 continue
-            exact = candidate.counts.get(term, 0)
-            if exact:
-                score += weight * _saturation(exact, candidate.length, average_length)
-            else:
-                stemmed = candidate.stems.get(_stem(term), 0)
-                score += weight * _SEARCH_STEM_DISCOUNT * _saturation(stemmed, candidate.length, average_length)
+            count, discount = _term_count(candidate, term)
+            if count <= 0:
+                continue
+            score += weight * discount * _saturation(count, candidate.length, average_length)
         score += _SEARCH_COVERAGE_WEIGHT * len(matched)
         score += _SEARCH_PROXIMITY_WEIGHT * _proximity(candidate, matched, weights)
         scored.append((score, entry_id, candidate.hit))
     scored.sort(key=lambda item: (-item[0], item[1]))
-    return _fuse_aspect_ranks([hit for _score, _entry_id, hit in scored], ranks)
+    return _fuse_ranks(
+        [hit for _score, _entry_id, hit in scored], ranks, full_ranks, candidates, terms
+    )
 
 
-def _fuse_aspect_ranks(ordered: list[Any], ranks: dict[str, dict[str, int]]) -> list[Any]:
-    """Balance overall relevance with focused evidence for individual query aspects."""
+def _ranks_inside_documents(
+    candidates: dict[str, _Candidate], ranks: dict[str, dict[str, int]]
+) -> dict[str, int]:
+    """Return the best order a page has inside its own document, over all terms.
 
-    # Coverage alone favors pages mentioning many query terms over a statement
-    # containing just one requested metric. Fuse the overall ranking with each
-    # page's best individual-term rank, without summing duplicated query aspects.
-    best_ranks: dict[str, int] = {}
+    The order of a page for one term is only meaningful inside the document of
+    the question: the leader of a term in another document is not the leader
+    that answers this question.
+    """
+
+    result: dict[str, int] = {}
     for term_ranks in ranks.values():
+        by_document: dict[str, list[tuple[int, str]]] = {}
         for entry_id, rank in term_ranks.items():
-            best_ranks[entry_id] = min(best_ranks.get(entry_id, rank), rank)
+            candidate = candidates.get(entry_id)
+            if candidate is None:
+                continue
+            by_document.setdefault(candidate.document, []).append((rank, entry_id))
+        for entries in by_document.values():
+            entries.sort()
+            for position, (_rank, entry_id) in enumerate(entries, start=1):
+                if entry_id not in result or position < result[entry_id]:
+                    result[entry_id] = position
+    return result
+
+
+def _fuse_ranks(
+    ordered: list[Any],
+    ranks: dict[str, dict[str, int]],
+    full_ranks: dict[str, int],
+    candidates: dict[str, _Candidate],
+    terms: tuple[str, ...],
+) -> list[Any]:
+    """Balance the offline order with the orders that the Memory gives the pages.
+
+    The Memory searches the whole question with the statistics of the whole corpus,
+    which is what tells the pages of the document that the question is about apart
+    from the pages of the other documents.  The offline order adds the coverage of
+    the question terms and their proximity.  The best order of a page for a single
+    term keeps a page that answers one aspect of a multi part question in the
+    result.  A page of the document that the question names is worth more than a
+    page of another document, however well the other document repeats the generic
+    words of the question.
+    """
+
+    best_ranks: dict[str, int] = {}
+    for query_ranks in ranks.values():
+        for entry_id, rank in query_ranks.items():
+            if entry_id in best_ranks:
+                best_ranks[entry_id] = min(best_ranks[entry_id], rank)
+            else:
+                best_ranks[entry_id] = rank
+    # The order of a page for one term is only meaningful inside the document
+    # of the question: the leader of a term in another document is not the
+    # leader that answers this question.
+    document_ranks = _ranks_inside_documents(candidates, ranks)
+    for entry_id, rank in document_ranks.items():
+        if entry_id in best_ranks:
+            best_ranks[entry_id] = min(best_ranks[entry_id], rank)
+        else:
+            best_ranks[entry_id] = rank
     fused: list[tuple[float, int, Any]] = []
     for rank, hit in enumerate(ordered, start=1):
-        score = 1.0 / (_SEARCH_RANK_OFFSET + rank)
-        if hit.entry_id in best_ranks:
-            score += 1.0 / (_SEARCH_RANK_OFFSET + best_ranks[hit.entry_id])
+        score = _SEARCH_OFFLINE_WEIGHT / (_SEARCH_RANK_OFFSET + rank)
+        aspect_rank = best_ranks.get(hit.entry_id)
+        if aspect_rank is not None:
+            score += _SEARCH_ASPECT_WEIGHT / (_SEARCH_RANK_OFFSET + aspect_rank)
+        full_rank = full_ranks.get(hit.entry_id)
+        if full_rank is not None:
+            score += _SEARCH_FULL_QUESTION_WEIGHT / (_SEARCH_RANK_OFFSET + full_rank)
+        candidate = candidates.get(hit.entry_id)
+        if candidate is not None and _document_match(candidate, terms):
+            score += _SEARCH_DOCUMENT_WEIGHT
         fused.append((score, rank, hit))
     fused.sort(key=lambda item: (-item[0], item[1]))
     return [hit for _score, _rank, hit in fused]
+
+
+def _document_match(candidate: _Candidate, terms: tuple[str, ...]) -> int:
+    """Return how many question terms name the document of one page.
+
+    A question is about one document, and the question usually names it.  The
+    document is written in front of the text of every page, so a page whose
+    document carries one of the question terms is a page of the document that
+    the question asks about.  Without this signal the pages of the other
+    documents win whenever they repeat the generic words of the question, for
+    example "income", "cash" or "statement".
+    """
+
+    if not candidate.header:
+        return 0
+    matched = 0
+    for term in terms:
+        if term in candidate.header or _stem(term) in candidate.header:
+            matched += 1
+    return matched
 
 
 def _matched_terms(candidate: _Candidate, terms: tuple[str, ...]) -> list[str]:
@@ -383,9 +505,73 @@ def _matched_terms(candidate: _Candidate, terms: tuple[str, ...]) -> list[str]:
 
     matched: list[str] = []
     for term in terms:
-        if candidate.counts.get(term) or candidate.stems.get(_stem(term)):
+        count, _discount = _term_count(candidate, term)
+        if count:
             matched.append(term)
     return matched
+
+
+def _term_count(candidate: _Candidate, term: str) -> tuple[int, float]:
+    """Return how often a question term occurs in one page and what that counts.
+
+    An exact token counts fully, a token with the same stem counts with the stem
+    discount and a token that only shares a prefix with the stem of the term
+    counts with the smaller prefix discount.  The suffix rules of the stemmer do
+    not catch every morphological pair: "tax" and "taxes", "geography" and
+    "geographic" or "margin" and "marginal" are one word for a reader and two
+    tokens for a matcher.
+    """
+
+    forms = _term_forms(term)
+    for form in forms:
+        exact = candidate.counts.get(form, 0)
+        if exact:
+            return exact, 1.0
+    for form in forms:
+        stemmed = candidate.stems.get(_stem(form), 0)
+        if stemmed:
+            return stemmed, _SEARCH_STEM_DISCOUNT
+    term_stems = [_stem(form) for form in forms]
+    loose = 0
+    for term_stem in term_stems:
+        for size in range(_SEARCH_PREFIX_MIN_LENGTH, min(len(term_stem), _SEARCH_PREFIX_MAX_LENGTH) + 1):
+            count = candidate.prefixes.get(term_stem[:size], 0)
+            if count > loose:
+                loose = count
+    if loose:
+        return loose, _SEARCH_PREFIX_DISCOUNT
+    return 0, 0.0
+
+
+def _term_forms(term: str) -> tuple[str, ...]:
+    """Return the forms of one question term that a page can carry.
+
+    A fiscal year is one token in a question ("fy2022") and a plain year on the
+    page ("2022"), so the digits of a term that starts with letters are a form
+    of their own.
+    """
+
+    forms = [term]
+    digits = "".join(character for character in term if character.isdigit())
+    if digits and digits != term and term[0].isalpha():
+        forms.append(digits)
+    return tuple(forms)
+
+
+def _documents_per_term(
+    candidates: dict[str, _Candidate], terms: tuple[str, ...]
+) -> Counter[str]:
+    """Return how many documents every question term appears in."""
+
+    counts: Counter[str] = Counter()
+    for term in terms:
+        documents = set()
+        for candidate in candidates.values():
+            count, _discount = _term_count(candidate, term)
+            if count:
+                documents.add(candidate.document)
+        counts[term] = len(documents)
+    return counts
 
 
 def _inverse_frequency(document_frequency: int, corpus: int) -> float:
