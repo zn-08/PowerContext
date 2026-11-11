@@ -139,14 +139,20 @@ npm install && npm run setup-db && npm run selftest
 
 入口：https://open.oceanbase.com/train?questionId=600078 （Qoder 赛题）
 
+> 提测表单（2026-11-11 实测）只有 4 项：**代码仓库地址（只读，取报名信息）**、
+> **Commit id**、**Branch**、**作品链接**。表单里**没有** UID 输入框，
+> 所以 UID 与其余材料要放进仓库：`qoder/evidence/qoder-dev/QODER-UID.txt` 写 UID，
+> 开发记录截图放 `qoder/evidence/qoder-dev/`，运行说明与验证样例分别在
+> `qoder/README.md` 与 `qoder/evidence/selftest.md`。
+
 | 表单项 | 填什么 |
 | --- | --- |
-| 项目网站网址 | Qoder Sites 发布后的完整 URL（可见范围「任何人都可访问」） |
-| 代码仓库地址 | `https://github.com/zn-08/PowerContext` |
+| 作品链接 | Qoder Sites 发布后的完整 URL（可见范围「任何人都可访问」） |
+| 代码仓库地址 | 只读，自动取报名信息 `https://github.com/zn-08/PowerContext` |
 | 分支 | `2026-competition-ecosystem` |
-| commit | 提交时的**完整 40 位 SHA**（见下） |
-| Qoder 账号 UID | 你的 Qoder 账号 UID（用于核对站点归属与使用记录） |
-| 其余材料 | 运行说明、验证样例、Qoder 开发记录（截图/录屏） |
+| Commit id | 提交时的**完整 40 位 SHA**（见下） |
+| Qoder 账号 UID（不在表单里） | 写进 `qoder/evidence/qoder-dev/QODER-UID.txt` 并提交到同一 commit |
+| 其余材料 | 运行说明、验证样例、Qoder 开发记录（截图/录屏）一并放在 `qoder/` 目录 |
 
 取当前 commit SHA：
 
