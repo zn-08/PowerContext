@@ -43,7 +43,8 @@ dify/
 ├── README.md                              本文件（运行说明）
 ├── npc-memory-chatflow.yml                Dify Chatflow 导出，DSL version 0.5.0（Dify ≥ 1.12 用这个）
 ├── npc-memory-chatflow-legacy.yml         同一份工作流，DSL version 0.1.5（老版本 Dify 导入报版本不支持时改用这个）
-├── check_dsl.py                           DSL 自检：解析 YAML，检查图连通、模板引用、每个节点的降级策略
+├── check_dsl.py                           DSL 自检：解析 YAML，检查图连通、模板引用、导入器需要的字段、每个节点的降级策略
+├── make_legacy_dsl.py                     由主 DSL 生成 legacy 副本（只改 version，两个文件内容保持一致）
 ├── verify_samples.py                      验证样例脚本：照着工作流发同样的两个 POST 请求
 ├── service/
 │   ├── app.py                             记忆服务：读记忆 / 全文检索设定 / 写回记忆
@@ -65,9 +66,15 @@ python dify/check_dsl.py dify/npc-memory-chatflow-legacy.yml
 ```
 
 `check_dsl.py` 会检查：YAML 能解析、只有一个 start 与一个 answer、所有节点从 start 可达、
-所有 `{{#...#}}` 模板引用都有对应变量、**没有任何 `env.` 引用**、并且每个可能失败的节点
+所有 `{{#...#}}` 模板引用都有对应变量、**没有任何 `env.` 引用**、每个可能失败的节点
 （两个 HTTP 节点与 LLM 节点）都带 `error_strategy.default_value`——保证主流程不会因为
-外部依赖失败而中断。
+外部依赖失败而中断；并且核对**导入器需要的结构**：
+`kind: app`、`app.mode: advanced-chat`、`dependencies`、`workflow.conversation_variables`、
+`workflow.environment_variables`（0.5.0 还需 `workflow.rag_pipeline_variables`）、
+HTTP 节点的 `method` 大写、`ssl_verify` 与 `timeout.connect/read/write`、
+LLM 节点的 `model.provider` 与 `model.name`。
+这些键名与 Dify 自身导出的 DSL 完全一致（对照公开样例 `dzh-gitcode/dify-workflows`、
+`wwwzhouhui/dify-for-dsl` 的导出文件核过）。
 
 ### DSL 文件的用途与导入顺序
 
@@ -78,8 +85,8 @@ python dify/check_dsl.py dify/npc-memory-chatflow-legacy.yml
 | `npc-memory-chatflow.yml` | `0.5.0` | Dify ≥ 1.12（当前版本） | **默认用这个** |
 | `npc-memory-chatflow-legacy.yml` | `0.1.5` | 更早的 Dify | 导入报「版本不支持 / app version is too high」时改用这个 |
 
-两个文件是**同一份工作流的两个 DSL 版本**（节点、连线、提示词完全一致，只有 `version:` 一行不同），
-不是两个应用，**只导入其中一个**。
+两个文件是**同一份工作流的两个 DSL 版本**（节点、连线、提示词、字段完全一致，只有 `version:` 一行不同，
+legacy 副本由 `make_legacy_dsl.py` 从主文件生成，保证不会漂移），不是两个应用，**只导入其中一个**。
 
 导入顺序：先按第五节把 **seekdb + 记忆服务**跑起来，再导入 DSL，再按 4.2 绑定模型，最后发布应用。
 **导入后不需要设置任何环境变量**：两个 HTTP 节点把记忆服务地址写成了 `http://127.0.0.1:8808`，

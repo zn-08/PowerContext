@@ -111,6 +111,46 @@ def main() -> int:
                 if not default:
                     problems.append(f"{node_id}: error_strategy without a default_value")
 
+    # the structure that the importer of Dify expects
+    workflow = doc.get("workflow", {})
+    for key in ("conversation_variables", "environment_variables"):
+        if key not in workflow:
+            problems.append(f"workflow.{key} is missing")
+    if str(doc.get("version")) >= "0.5.0" and "rag_pipeline_variables" not in workflow:
+        problems.append("workflow.rag_pipeline_variables is missing")
+    for key in ("dependencies", "kind", "version"):
+        if key not in doc:
+            problems.append(f"{key} is missing")
+    if doc.get("kind") != "app":
+        problems.append(f"kind is {doc.get('kind')!r}, expected 'app'")
+    if doc.get("app", {}).get("mode") != "advanced-chat":
+        problems.append("app.mode is not advanced-chat")
+
+    # the fields of a http request node that Dify fills with its defaults
+    for node_id, node in nodes.items():
+        data = node.get("data", {})
+        if data.get("type") != "http-request":
+            continue
+        if data.get("method") != str(data.get("method", "")).upper():
+            problems.append(f"{node_id}: the method {data.get('method')!r} is not upper case")
+        if "ssl_verify" not in data:
+            problems.append(f"{node_id}: ssl_verify is missing")
+        timeout = data.get("timeout", {})
+        for key in ("connect", "read", "write"):
+            if key not in timeout:
+                problems.append(f"{node_id}: timeout.{key} is missing")
+        if not str(data.get("url", "")).startswith("http"):
+            problems.append(f"{node_id}: the url {data.get('url')!r} is not a http address")
+
+    # the model of the keeper
+    llm_nodes = [node for node in nodes.values() if node.get("data", {}).get("type") == "llm"]
+    if not llm_nodes:
+        problems.append("the flow has no llm node")
+    for node in llm_nodes:
+        model = node.get("data", {}).get("model", {})
+        if not model.get("provider") or not model.get("name"):
+            problems.append("the llm node has no model provider and name")
+
     print(f"{path}: version={doc.get('version')} nodes={len(nodes)} edges={len(edges)}")
     for node_id, node in nodes.items():
         data = node.get("data", {})

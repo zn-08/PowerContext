@@ -10,6 +10,7 @@ kind: app
 version: 0.5.0
 workflow:
   conversation_variables: []
+  environment_variables: []
   features:
     file_upload:
       allowed_file_extensions:
@@ -153,17 +154,21 @@ workflow:
           default_value: '{"session_id": "", "query": "", "memory": [], "lore": []}'
           type: default_value
         headers: 'Content-Type:application/json'
-        method: post
+        method: POST
         params: ''
         retry_config:
           max_retries: 3
           retry_enabled: true
           retry_interval: 100
         selected: false
+        ssl_verify: true
         timeout:
-          max_connect_timeout: 10
-          max_read_timeout: 30
+          connect: 30
+          max_connect_timeout: 30
+          max_read_timeout: 60
           max_write_timeout: 30
+          read: 60
+          write: 30
         title: 读取记忆与设定
         type: http-request
         url: 'http://127.0.0.1:8808/context'
@@ -186,27 +191,15 @@ workflow:
           enabled: false
           variable_selector: []
         desc: 结合记忆与设定生成掌柜的回应
-        memory:
-          query_prompt_template: '{{#ctx.body#}}'
-          role_prefix:
-            assistant: ''
-            user: ''
-          window:
-            enabled: false
-            size: 10
+        error_strategy:
+          default_value: '（掌柜一时没接上话，账本先空着。你再说一遍？）'
+          type: default_value
         model:
           completion_params:
             temperature: 0.8
           mode: chat
           name: gpt-4o-mini
           provider: langgenius/openai/openai
-        retry_config:
-          max_retries: 3
-          retry_enabled: true
-          retry_interval: 1000
-        error_strategy:
-          type: default_value
-          default_value: '（掌柜一时没接上话，账本先空着。你再说一遍？）'
         prompt_template:
         - id: sys-1
           role: system
@@ -214,11 +207,13 @@ workflow:
             你是「歪脖子酒馆」的掌柜，一个记得住每一个客人恶作剧的老狐狸。
 
             规则：
-            1. 你只能依据下面这份资料说话，不能编造资料里没有的设定。
-            2. `memory` 是这个玩家过去的对话记录；`lore` 是用全文索引从世界设定表里检索出来的条目。
-            3. 每条 `lore` 同时带中英两版：`title` / `body` 是英文原文，`title_zh` / `body_zh` 是同一条设定的中文版本。你要用**中文**回答玩家，引用设定时用 `title_zh` / `body_zh` 的说法，并把它改写成酒馆的口吻（不要直接念英文原文）。
-            4. 如果玩家的行为违反了 `lore` 里的规矩，你要用掌柜的口吻点破它，并引用对应的设定条目。
-            5. 如果玩家重复了以前干过的事，你要明确指出账本上已经记着，不许重复。
+            1. 资料里有 `memory`（这个玩家过去的对话记录）和 `lore`（用全文索引从世界设定表里检索出来的条目）。
+               有资料时，只依据资料说话，不要编造资料里没有的设定。
+            2. 每条 `lore` 同时带中英两版：`title` / `body` 是英文原文，`title_zh` / `body_zh` 是同一条设定的中文版本。
+               用**中文**回答玩家，引用设定时用 `title_zh` / `body_zh` 的说法，并改写成酒馆的口吻（不要直接念英文原文）。
+            3. 如果玩家的行为违反了 `lore` 里的规矩，用掌柜的口吻点破它，并引用对应的设定条目。
+            4. 如果玩家重复了以前干过的事，明确指出账本上已经记着，不许重复。
+            5. 资料为空（记忆服务暂时联系不上）时，不要提「读不到资料」，直接按掌柜的性格和这一轮玩家说的话回应。
             6. 每次回话控制在 120 字以内，语气要有市井气，可以有点促狭，但不要脏话。
             7. 最后用一行 `账本:` 开头记录这一轮玩家的行为摘要。
         - id: usr-1
@@ -228,6 +223,10 @@ workflow:
 
             记忆服务返回的资料：
             {{#ctx.body#}}
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 1000
         selected: false
         title: 掌柜
         type: llm
@@ -271,17 +270,21 @@ workflow:
           default_value: '{"ok": false, "skipped": true}'
           type: default_value
         headers: 'Content-Type:application/json'
-        method: post
+        method: POST
         params: ''
         retry_config:
           max_retries: 3
           retry_enabled: true
           retry_interval: 100
         selected: false
+        ssl_verify: true
         timeout:
-          max_connect_timeout: 10
-          max_read_timeout: 30
+          connect: 30
+          max_connect_timeout: 30
+          max_read_timeout: 60
           max_write_timeout: 30
+          read: 60
+          write: 30
         title: 写回记忆
         type: http-request
         url: 'http://127.0.0.1:8808/memory'
@@ -323,3 +326,4 @@ workflow:
       x: 0
       y: 0
       zoom: 0.75
+  rag_pipeline_variables: []
