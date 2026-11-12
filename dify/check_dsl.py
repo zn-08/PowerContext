@@ -121,8 +121,13 @@ def main() -> int:
     for key in ("conversation_variables", "environment_variables"):
         if key not in workflow:
             problems.append(f"workflow.{key} is missing")
-    if str(doc.get("version")) >= "0.5.0" and "rag_pipeline_variables" not in workflow:
-        problems.append("workflow.rag_pipeline_variables is missing")
+    if str(doc.get("version")) != "0.3.0":
+        problems.append(
+            f"version is {doc.get('version')!r}: Dify only imports a DSL whose version is not "
+            "newer than the instance, 0.3.0 is the version Dify 1.x writes and migrates from"
+        )
+    if "rag_pipeline_variables" in workflow:
+        problems.append("workflow.rag_pipeline_variables only exists from DSL version 0.4.0 on")
     for key in ("dependencies", "kind", "version"):
         if key not in doc:
             problems.append(f"{key} is missing")

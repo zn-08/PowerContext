@@ -7,7 +7,7 @@ app:
   use_icon_as_answer_icon: false
 dependencies: []
 kind: app
-version: 0.5.0
+version: 0.3.0
 workflow:
   conversation_variables: []
   environment_variables: []
@@ -27,11 +27,11 @@ workflow:
       - remote_url
       enabled: false
       fileUploadConfig:
-        audio_file_size_limit: 50
+        audio_file_size_limit: 500
         batch_count_limit: 5
         file_size_limit: 15
-        image_file_size_limit: 10
-        video_file_size_limit: 100
+        image_file_size_limit: 100
+        video_file_size_limit: 500
         workflow_file_upload_limit: 10
       image:
         enabled: false
@@ -299,4 +299,3 @@ workflow:
       x: 0
       y: 0
       zoom: 0.75
-  rag_pipeline_variables: []
