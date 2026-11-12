@@ -30,6 +30,7 @@ import {
   search,
   stats,
 } from '../src/db.js';
+import { assertEmbedderReady } from '../src/embed.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -43,6 +44,7 @@ function out(text = '') {
 const USER = 'selftest-user';
 
 async function main() {
+  await assertEmbedderReady();
   await ensureSchema();
 
   out('# 文献罗盘 PaperCompass · 端到端自测记录');

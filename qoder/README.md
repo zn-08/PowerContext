@@ -50,15 +50,34 @@ paper_review    (user_id, doc_id, title, ease, interval_days, reps, due_at, upda
 
 ### 向量方案
 
-`src/embed.js` 用**完全本地的特征哈希 TF-IDF 向量**：
+向量由 `src/embed.js` 按 `EMBED_PROVIDER` 选择 provider，两种实现遵守同一套契约：
+**长度等于 `EMBED_DIM`、L2 归一化**，因此都能直接喂给 seekdb 的 `cosine_distance`，
+检索、建索引、混合融合的流程完全不用改（`embed(text, idf, dim)` / `toVectorLiteral(vector)` 是稳定入口）。
+
+**`local`（默认）** —— `src/embedders/local.js`，特征哈希 TF-IDF：
 
 - 分词：拉丁词按字母数字切分；中文切成「单字 + 相邻二元组」；
 - 哈希：FNV-1a 映射到 384 维并带正负号（sign hashing）抑制冲突偏差；
 - 加权：TF 用 sublinear（`1 + ln tf`），**IDF 来自 seekdb 的 `paper_term` 表**；
 - 归一化：L2 归一化，因此可以直接用 `cosine_distance`。
 
-这样评审环境**不需要模型下载、不需要 API Key、不需要 GPU**，`npm install` 之后就能跑。
-需要更强的语义能力时，把 `embed()` 换成外部 embedding 即可，其余流程不变。
+**`openai`** —— `src/embedders/openai.js`，调用 OpenAI 兼容的 `/v1/embeddings`：
+`EMBED_PROVIDER=openai` + `EMBED_API_KEY` 必填，`EMBED_BASE_URL` / `EMBED_MODEL` 可指向自建或兼容网关。
+
+两种 provider 的取舍：
+
+| | `local` | `openai` |
+| --- | --- | --- |
+| 语义能力 | 词面相似为主，同义改写靠二元组和 IDF 撑 | 真正的语义相似，跨表述、跨语言更稳 |
+| 环境要求 | 零依赖、离线可跑，`npm install` 之后就能评审 | 需要 API Key 与外网，服务不可用时检索直接失败 |
+| 成本 / 延迟 | 纯本地计算，微秒级 | 每次检索和每次重建索引都要发请求，导入大文档会明显变慢 |
+| 维度 | 任意（默认 384） | 由模型决定，必须等于 `EMBED_DIM`；启动自检会真打一次接口，不匹配就报错并给出改法 |
+| 可复现性 | 完全确定，评审可逐位复现 `evidence/selftest.md` | 取决于外部模型版本 |
+
+所以默认值仍是 `local`：它把「装完就能跑」这个门槛拿掉，`openai` 是给想要更强语义的人的可选升级。
+**切换 provider 后必须重新灌向量**（两套向量不在同一个空间里，混着用会让排名错乱）：
+改好环境变量后执行 `npm run setup-db`，它会用当前 provider 重算所有段落的 `emb`；
+如果同时改了 `EMBED_DIM`，还要先 `DROP TABLE paper_doc;` 让建表用新的维度重建向量索引。
 
 ## 四、目录结构
 
@@ -69,7 +88,10 @@ qoder/
 ├── package.json
 ├── src/
 │   ├── config.js                 环境变量配置
-│   ├── embed.js                  本地特征哈希 TF-IDF 向量
+│   ├── embed.js                  向量 provider 入口：按 EMBED_PROVIDER 选择实现
+│   ├── embedders/
+│   │   ├── local.js              本地特征哈希 TF-IDF 向量（默认，零依赖）
+│   │   └── openai.js             OpenAI 兼容的 /v1/embeddings
 │   ├── chunk.js                  段落切块
 │   ├── db.js                     seekdb 访问层：建表 / 导入 / 混合检索 / 记忆表
 │   └── server.js                 HTTP 服务 + 静态前端
@@ -160,7 +182,11 @@ node scripts/serve-site.js 5175
 | `SEEKDB_USER` / `SEEKDB_PASSWORD` | `root` / 空 | 账号 |
 | `SEEKDB_DATABASE` | `papercompass` | 库名（不存在会自动建） |
 | `PORT` | `5174` | HTTP 端口 |
-| `EMBED_DIM` | `384` | 向量维度（必须与建表时的 `VECTOR(384)` 一致） |
+| `EMBED_DIM` | `384` | 向量维度（必须与建表时的 `VECTOR(384)` 一致；`EMBED_PROVIDER=openai` 时还要等于模型输出维度） |
+| `EMBED_PROVIDER` | `local` | `local` = 本地特征哈希 TF-IDF；`openai` = OpenAI 兼容的 `/v1/embeddings` |
+| `EMBED_API_KEY` | 空 | `EMBED_PROVIDER=openai` 时必填，缺少时启动即报错 |
+| `EMBED_BASE_URL` | `https://api.openai.com/v1` | embedding 接口地址，可填自建或兼容网关（会自动补 `/embeddings`） |
+| `EMBED_MODEL` | `text-embedding-3-small` | `EMBED_PROVIDER=openai` 时使用的模型 |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `320` / `80` | 切块长度与重叠 |
 | `SEARCH_MODE` | `native` | `native` = `DBMS_HYBRID_SEARCH`；`sql` = 手写单条 RRF（等价降级路径） |
 | `TOP_K` | `8` | 默认返回条数 |
@@ -242,8 +268,8 @@ npm run setup-db      # 再跑一次，段落数不变
 
 ## 七、已知限制
 
-- 向量是**本地特征哈希 TF-IDF**，不是语义模型：对同义改写有效，对完全不同的表述不如真实 embedding 模型。
-  需要更强语义时替换 `src/embed.js` 的 `embed()` 即可（注意维度要一致）。
+- 向量默认是**本地特征哈希 TF-IDF**，不是语义模型：对同义改写有效，对完全不同的表述不如真实 embedding 模型。
+  需要更强语义时把 `EMBED_PROVIDER` 设成 `openai`（见「向量方案」），维度要和 `EMBED_DIM` 一致，切换后重新 `npm run setup-db`。
 - `paper_doc` **不使用用户主键**（seekdb 原生混合检索要求隐藏 `__pk_increment` 列），
   因此幂等性靠 `UNIQUE(id)` 保证，删除段落需要单独执行 `DELETE`。
 - 混合检索的 `native` 模式依赖 `DBMS_HYBRID_SEARCH`（seekdb ≥ 1.3）；

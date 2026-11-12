@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import { config } from './config.js';
 import { chunkId, chunkText } from './chunk.js';
+import { assertEmbedderReady } from './embed.js';
 import {
   ensureSchema,
   gradeReview,
@@ -198,12 +199,14 @@ export function createServer() {
 }
 
 async function main() {
+  // provider 配置有问题时（维度不匹配、缺少 EMBED_API_KEY 等）直接在启动阶段失败
+  const embedder = await assertEmbedderReady();
   await ensureSchema();
   const server = createServer();
   server.listen(config.httpPort, config.httpHost, () => {
     console.log(`[papercompass] http://${config.httpHost}:${config.httpPort}`);
     console.log(`[papercompass] seekdb ${config.db.host}:${config.db.port}/${config.db.database}`);
-    console.log(`[papercompass] search mode = ${config.searchMode}, dim = ${config.dim}`);
+    console.log(`[papercompass] search mode = ${config.searchMode}, embedder = ${embedder.provider}, dim = ${embedder.dim}`);
   });
 }
 

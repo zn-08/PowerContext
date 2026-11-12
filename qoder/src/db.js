@@ -201,7 +201,7 @@ export async function reindexVectors() {
   const docs = await runSql('SELECT id, title, source, chunk_index, body FROM paper_doc');
   let updated = 0;
   for (const doc of docs) {
-    const vector = embed(`${doc.title}\n${doc.body}`, idf, config.dim);
+    const vector = await embed(`${doc.title}\n${doc.body}`, idf, config.dim);
     await runSql('UPDATE paper_doc SET emb = ? WHERE id = ?', [toVectorLiteral(vector), doc.id]);
     updated += 1;
   }
@@ -358,7 +358,7 @@ export async function search({ query, topK = config.topK, mode = config.searchMo
 
   const df = await loadDf();
   const idf = buildIdf(df, await countDocs());
-  const qvec = embed(text, idf, config.dim);
+  const qvec = await embed(text, idf, config.dim);
   const started = Date.now();
 
   let result;

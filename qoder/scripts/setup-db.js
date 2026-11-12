@@ -12,12 +12,14 @@ import { fileURLToPath } from 'node:url';
 import { chunkId, chunkText } from '../src/chunk.js';
 import { config } from '../src/config.js';
 import { close, ensureSchema, ingest, stats } from '../src/db.js';
+import { assertEmbedderReady } from '../src/embed.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const NOTES_DIR = path.join(ROOT, 'data', 'notes');
 
 async function main() {
+  await assertEmbedderReady();
   await ensureSchema();
   const files = (await fs.readdir(NOTES_DIR)).filter((name) => name.endsWith('.md')).sort();
   let total = 0;
