@@ -140,21 +140,16 @@ workflow:
           type: no-auth
         body:
           data:
-          - id: body-session
-            key: session_id
+          - id: body-json
+            key: ''
             type: text
-            value: '{{#start.session_id#}}'
-          - id: body-query
-            key: query
-            type: text
-            value: '{{#start.player_input#}}'
+            value: '{"session_id": "{{#start.session_id#}}", "query": "{{#start.player_input#}}"}'
           type: json
+        default_value: '{"session_id": "", "query": "", "memory": [], "lore": []}'
         desc: 向记忆服务取回这个玩家的过往记忆，并用全文索引检索相关设定
-        error_strategy:
-          default_value: '{"session_id": "", "query": "", "memory": [], "lore": []}'
-          type: default_value
+        error_strategy: default-value
         headers: 'Content-Type:application/json'
-        method: POST
+        method: post
         params: ''
         retry_config:
           max_retries: 3
@@ -163,12 +158,9 @@ workflow:
         selected: false
         ssl_verify: true
         timeout:
-          connect: 30
           max_connect_timeout: 30
           max_read_timeout: 60
           max_write_timeout: 30
-          read: 60
-          write: 30
         title: 读取记忆与设定
         type: http-request
         url: 'http://127.0.0.1:8808/context'
@@ -190,10 +182,9 @@ workflow:
         context:
           enabled: false
           variable_selector: []
+        default_value: '（掌柜一时没接上话，账本先空着。你再说一遍？）'
         desc: 结合记忆与设定生成掌柜的回应
-        error_strategy:
-          default_value: '（掌柜一时没接上话，账本先空着。你再说一遍？）'
-          type: default_value
+        error_strategy: default-value
         model:
           completion_params:
             temperature: 0.8
@@ -223,16 +214,10 @@ workflow:
 
             记忆服务返回的资料：
             {{#ctx.body#}}
-        retry_config:
-          max_retries: 3
-          retry_enabled: true
-          retry_interval: 1000
         selected: false
         title: 掌柜
         type: llm
         variables: []
-        vision:
-          enabled: false
       height: 96
       id: llm
       position:
@@ -252,25 +237,16 @@ workflow:
           type: no-auth
         body:
           data:
-          - id: body-session
-            key: session_id
+          - id: body-json
+            key: ''
             type: text
-            value: '{{#start.session_id#}}'
-          - id: body-player
-            key: player_input
-            type: text
-            value: '{{#start.player_input#}}'
-          - id: body-reply
-            key: npc_reply
-            type: text
-            value: '{{#llm.text#}}'
+            value: '{"session_id": "{{#start.session_id#}}", "player_input": "{{#start.player_input#}}", "npc_reply": "{{#llm.text#}}"}'
           type: json
+        default_value: '{"ok": false, "skipped": true}'
         desc: 把这一轮写回 seekdb 的记忆表
-        error_strategy:
-          default_value: '{"ok": false, "skipped": true}'
-          type: default_value
+        error_strategy: default-value
         headers: 'Content-Type:application/json'
-        method: POST
+        method: post
         params: ''
         retry_config:
           max_retries: 3
@@ -279,12 +255,9 @@ workflow:
         selected: false
         ssl_verify: true
         timeout:
-          connect: 30
           max_connect_timeout: 30
           max_read_timeout: 60
           max_write_timeout: 30
-          read: 60
-          write: 30
         title: 写回记忆
         type: http-request
         url: 'http://127.0.0.1:8808/memory'

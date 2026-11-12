@@ -101,15 +101,20 @@ def main() -> int:
                 problems.append(f"{node_id}/{where}: still references an env variable")
 
     # every node that can fail needs a fallback so the main flow cannot break
+    # Dify stores the strategy as a scalar next to the default value, not as a
+    # mapping: "error_strategy: default-value" with a sibling "default_value".
     for node_id, node in nodes.items():
         data = node.get("data", {})
         if data.get("type") in ("http-request", "llm"):
             if "error_strategy" not in data:
                 problems.append(f"{node_id}: no error_strategy, a failure would block the flow")
-            else:
-                default = data["error_strategy"].get("default_value")
-                if not default:
-                    problems.append(f"{node_id}: error_strategy without a default_value")
+            elif data["error_strategy"] != "default-value":
+                problems.append(
+                    f"{node_id}: error_strategy is {data['error_strategy']!r}, "
+                    "expected the scalar 'default-value'"
+                )
+            if not data.get("default_value"):
+                problems.append(f"{node_id}: error_strategy without a default_value")
 
     # the structure that the importer of Dify expects
     workflow = doc.get("workflow", {})
@@ -131,14 +136,24 @@ def main() -> int:
         data = node.get("data", {})
         if data.get("type") != "http-request":
             continue
-        if data.get("method") != str(data.get("method", "")).upper():
-            problems.append(f"{node_id}: the method {data.get('method')!r} is not upper case")
+        if data.get("method") != str(data.get("method", "")).lower():
+            problems.append(f"{node_id}: the method {data.get('method')!r} is not lower case")
         if "ssl_verify" not in data:
             problems.append(f"{node_id}: ssl_verify is missing")
         timeout = data.get("timeout", {})
-        for key in ("connect", "read", "write"):
+        for key in ("max_connect_timeout", "max_read_timeout", "max_write_timeout"):
             if key not in timeout:
                 problems.append(f"{node_id}: timeout.{key} is missing")
+        for key in ("connect", "read", "write"):
+            if key in timeout:
+                problems.append(f"{node_id}: timeout.{key} is not a field of the Dify timeout")
+        body = data.get("body", {})
+        if body.get("type") == "json":
+            items = body.get("data")
+            if not isinstance(items, list) or len(items) != 1:
+                problems.append(f"{node_id}: a json body carries exactly one entry")
+            elif items[0].get("key") not in ("", None):
+                problems.append(f"{node_id}: a json body has no key")
         if not str(data.get("url", "")).startswith("http"):
             problems.append(f"{node_id}: the url {data.get('url')!r} is not a http address")
 

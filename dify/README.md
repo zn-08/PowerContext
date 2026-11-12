@@ -42,9 +42,7 @@
 dify/
 ├── README.md                              本文件（运行说明）
 ├── npc-memory-chatflow.yml                Dify Chatflow 导出，DSL version 0.5.0（Dify ≥ 1.12 用这个）
-├── npc-memory-chatflow-legacy.yml         同一份工作流，DSL version 0.1.5（老版本 Dify 导入报版本不支持时改用这个）
 ├── check_dsl.py                           DSL 自检：解析 YAML，检查图连通、模板引用、导入器需要的字段、每个节点的降级策略
-├── make_legacy_dsl.py                     由主 DSL 生成 legacy 副本（只改 version，两个文件内容保持一致）
 ├── verify_samples.py                      验证样例脚本：照着工作流发同样的两个 POST 请求
 ├── service/
 │   ├── app.py                             记忆服务：读记忆 / 全文检索设定 / 写回记忆
@@ -62,13 +60,12 @@ dify/
 
 ```bash
 python dify/check_dsl.py dify/npc-memory-chatflow.yml     # 期望输出：OK: no problems found
-python dify/check_dsl.py dify/npc-memory-chatflow-legacy.yml
 ```
 
 `check_dsl.py` 会检查：YAML 能解析、只有一个 start 与一个 answer、所有节点从 start 可达、
 所有 `{{#...#}}` 模板引用都有对应变量、**没有任何 `env.` 引用**、每个可能失败的节点
-（两个 HTTP 节点与 LLM 节点）都带 `error_strategy.default_value`——保证主流程不会因为
-外部依赖失败而中断；并且核对**导入器需要的结构**：
+（两个 HTTP 节点与 LLM 节点）都带 `error_strategy: default-value` 与同级 `default_value`——
+保证主流程不会因为外部依赖失败而中断；并且核对**导入器需要的结构**：
 `kind: app`、`app.mode: advanced-chat`、`dependencies`、`workflow.conversation_variables`、
 `workflow.environment_variables`（0.5.0 还需 `workflow.rag_pipeline_variables`）、
 HTTP 节点的 `method` 大写、`ssl_verify` 与 `timeout.connect/read/write`、
@@ -78,15 +75,15 @@ LLM 节点的 `model.provider` 与 `model.name`。
 
 ### DSL 文件的用途与导入顺序
 
-本作品只有**一个** Dify 应用，因此**只导入一个 DSL 文件**（两个文件是同一份工作流的两个 DSL 版本，不是两个应用）：
+本作品只有**一个** Dify 应用，因此**只导入一个 DSL 文件**：
 
 | 文件 | DSL version | 适用 Dify | 什么时候用 |
 | --- | --- | --- | --- |
 | `npc-memory-chatflow.yml` | `0.5.0` | Dify ≥ 1.12（当前版本） | **默认用这个** |
-| `npc-memory-chatflow-legacy.yml` | `0.1.5` | 更早的 Dify | 导入报「版本不支持 / app version is too high」时改用这个 |
 
-两个文件是**同一份工作流的两个 DSL 版本**（节点、连线、提示词、字段完全一致，只有 `version:` 一行不同，
-legacy 副本由 `make_legacy_dsl.py` 从主文件生成，保证不会漂移），不是两个应用，**只导入其中一个**。
+如果你的 Dify 更老、导入时报「版本不支持 / app version is too high」，把这个文件里的
+`version: 0.5.0` 改成 `version: 0.1.5` 再导入即可——**除了这一行，工作流的节点、连线、
+提示词、字段完全一致**，不需要换别的文件。
 
 导入顺序：先按第五节把 **seekdb + 记忆服务**跑起来，再导入 DSL，再按 4.2 绑定模型，最后发布应用。
 **导入后不需要设置任何环境变量**：两个 HTTP 节点把记忆服务地址写成了 `http://127.0.0.1:8808`，
@@ -98,7 +95,7 @@ legacy 副本由 `make_legacy_dsl.py` 从主文件生成，保证不会漂移）
 | --- | --- |
 | seekdb | 官方发行版，MySQL 协议；本文用 `5.7.25-OceanBase seekdb-v1.3.0.0` 验证 |
 | Python | 3.10+，仅需 `PyMySQL`（`pip install -r service/requirements.txt`） |
-| Dify | **≥ 1.12**（对应 DSL `version: 0.5.0`）；更早的版本请用 `npc-memory-chatflow-legacy.yml`。Dify Cloud 同样适用 |
+| Dify | **≥ 1.12**（对应 DSL `version: 0.5.0`）；更早的版本把文件里 `version:` 改成 `0.1.5` 即可。Dify Cloud 同样适用 |
 | 模型 | 任意能通过 Dify 插件接入的对话模型。DSL 里预置了 `langgenius/openai/openai` + `gpt-4o-mini`，**导入后请在节点里换成你自己有额度、且评审环境能访问的模型**；模型只负责「按资料说话」，不负责检索 |
 
 > 模型插件不在 DSL 里打包（DSL 不含任何凭据）。导入后若掌柜节点显示「模型不可用」，
@@ -174,7 +171,7 @@ curl http://127.0.0.1:8808/health
 ### 4. 导入 Dify DSL
 
 1. Dify 控制台 → 「工作室」→ 「导入 DSL」→ 上传 **`npc-memory-chatflow.yml`**
-   （Dify 报版本不支持时改上传 `npc-memory-chatflow-legacy.yml`；两个文件是同一个应用，不要两个都导入）。
+   （只有一个 DSL 文件，不要重复导入）。
 2. **不需要设置环境变量**：DSL 里两个 HTTP 节点已经把记忆服务地址写成 `http://127.0.0.1:8808`，
    与 `service/start.sh` 的默认监听地址一致，导入即可用。
    （若 Dify 跑在容器里而记忆服务在宿主机，把两个节点的 `url` 改成
