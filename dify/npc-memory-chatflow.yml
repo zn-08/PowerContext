@@ -61,9 +61,20 @@ workflow:
     - data:
         isInIteration: false
         sourceType: start
-        targetType: http-request
-      id: start-source-ctx-target
+        targetType: code
+      id: start-source-encode-ctx-target
       source: start
+      sourceHandle: source
+      target: encode_ctx
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: http-request
+      id: encode-ctx-source-ctx-target
+      source: encode_ctx
       sourceHandle: source
       target: ctx
       targetHandle: target
@@ -83,9 +94,20 @@ workflow:
     - data:
         isInIteration: false
         sourceType: llm
-        targetType: http-request
-      id: llm-source-mem-target
+        targetType: code
+      id: llm-source-encode-mem-target
       source: llm
+      sourceHandle: source
+      target: encode_mem
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: http-request
+      id: encode-mem-source-mem-target
+      source: encode_mem
       sourceHandle: source
       target: mem
       targetHandle: target
@@ -135,6 +157,38 @@ workflow:
       type: custom
       width: 244
     - data:
+        code: |
+          import json
+
+          def main(session_id: str, player_input: str) -> dict:
+              return {"payload": json.dumps({
+                  "session_id": session_id,
+                  "query": player_input,
+              }, ensure_ascii=False)}
+        code_language: python3
+        desc: 把玩家输入序列化为合法 JSON，保留引号、换行和反斜杠
+        outputs:
+          payload:
+            children: null
+            type: string
+        selected: false
+        title: 编码查询请求
+        type: code
+        variables:
+        - value_selector: [start, session_id]
+          variable: session_id
+        - value_selector: [start, player_input]
+          variable: player_input
+      height: 54
+      id: encode_ctx
+      position: {x: 380, y: 280}
+      positionAbsolute: {x: 380, y: 280}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
         authorization:
           config: null
           type: no-auth
@@ -143,9 +197,18 @@ workflow:
           - id: body-json
             key: ''
             type: text
-            value: '{"session_id": "{{#start.session_id#}}", "query": "{{#start.player_input#}}"}'
-          type: json
-        default_value: '{"session_id": "", "query": "", "memory": [], "lore": []}'
+            value: '{{#encode_ctx.payload#}}'
+          type: raw-text
+        default_value:
+        - key: body
+          type: string
+          value: '{"session_id": "", "query": "", "memory": [], "lore": []}'
+        - key: status_code
+          type: number
+          value: 0
+        - key: headers
+          type: object
+          value: '{}'
         desc: 向记忆服务取回这个玩家的过往记忆，并用全文索引检索相关设定
         error_strategy: default-value
         headers: 'Content-Type:application/json'
@@ -168,10 +231,10 @@ workflow:
       height: 136
       id: ctx
       position:
-        x: 380
+        x: 680
         y: 280
       positionAbsolute:
-        x: 380
+        x: 680
         y: 280
       selected: false
       sourcePosition: right
@@ -182,7 +245,10 @@ workflow:
         context:
           enabled: false
           variable_selector: []
-        default_value: '（掌柜一时没接上话，账本先空着。你再说一遍？）'
+        default_value:
+        - key: text
+          type: string
+          value: '（掌柜一时没接上话，账本先空着。你再说一遍？）'
         desc: 结合记忆与设定生成掌柜的回应
         error_strategy: default-value
         model:
@@ -214,6 +280,10 @@ workflow:
 
             记忆服务返回的资料：
             {{#ctx.body#}}
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 1000
         selected: false
         title: 掌柜
         type: llm
@@ -221,11 +291,46 @@ workflow:
       height: 96
       id: llm
       position:
-        x: 680
+        x: 980
         y: 280
       positionAbsolute:
-        x: 680
+        x: 980
         y: 280
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        code: |
+          import json
+
+          def main(session_id: str, player_input: str, npc_reply: str) -> dict:
+              return {"payload": json.dumps({
+                  "session_id": session_id,
+                  "player_input": player_input,
+                  "npc_reply": npc_reply,
+              }, ensure_ascii=False)}
+        code_language: python3
+        desc: 把多行回复序列化为合法 JSON，再写回记忆
+        outputs:
+          payload:
+            children: null
+            type: string
+        selected: false
+        title: 编码记忆请求
+        type: code
+        variables:
+        - value_selector: [start, session_id]
+          variable: session_id
+        - value_selector: [start, player_input]
+          variable: player_input
+        - value_selector: [llm, text]
+          variable: npc_reply
+      height: 54
+      id: encode_mem
+      position: {x: 1280, y: 280}
+      positionAbsolute: {x: 1280, y: 280}
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -240,9 +345,18 @@ workflow:
           - id: body-json
             key: ''
             type: text
-            value: '{"session_id": "{{#start.session_id#}}", "player_input": "{{#start.player_input#}}", "npc_reply": "{{#llm.text#}}"}'
-          type: json
-        default_value: '{"ok": false, "skipped": true}'
+            value: '{{#encode_mem.payload#}}'
+          type: raw-text
+        default_value:
+        - key: body
+          type: string
+          value: '{"ok": false, "skipped": true}'
+        - key: status_code
+          type: number
+          value: 0
+        - key: headers
+          type: object
+          value: '{}'
         desc: 把这一轮写回 seekdb 的记忆表
         error_strategy: default-value
         headers: 'Content-Type:application/json'
@@ -265,10 +379,10 @@ workflow:
       height: 136
       id: mem
       position:
-        x: 980
+        x: 1580
         y: 280
       positionAbsolute:
-        x: 980
+        x: 1580
         y: 280
       selected: false
       sourcePosition: right
@@ -285,10 +399,10 @@ workflow:
       height: 105
       id: answer
       position:
-        x: 1280
+        x: 1880
         y: 280
       positionAbsolute:
-        x: 1280
+        x: 1880
         y: 280
       selected: false
       sourcePosition: right

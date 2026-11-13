@@ -87,6 +87,8 @@ def main() -> int:
         "start.player_input",
         "ctx.body",
         "llm.text",
+        "encode_ctx.payload",
+        "encode_mem.payload",
     }
     for node_id, node in nodes.items():
         for where, text in collect_templates(node.get("data", {})):
@@ -100,9 +102,8 @@ def main() -> int:
             if "env." in (text or ""):
                 problems.append(f"{node_id}/{where}: still references an env variable")
 
-    # every node that can fail needs a fallback so the main flow cannot break
-    # Dify stores the strategy as a scalar next to the default value, not as a
-    # mapping: "error_strategy: default-value" with a sibling "default_value".
+    # Dify stores default_value as a list of typed output variables. A scalar
+    # passes YAML parsing but prevents Dify from handling failures at runtime.
     for node_id, node in nodes.items():
         data = node.get("data", {})
         if data.get("type") in ("http-request", "llm"):
@@ -113,8 +114,18 @@ def main() -> int:
                     f"{node_id}: error_strategy is {data['error_strategy']!r}, "
                     "expected the scalar 'default-value'"
                 )
-            if not data.get("default_value"):
-                problems.append(f"{node_id}: error_strategy without a default_value")
+            defaults = data.get("default_value")
+            expected = {"text": "string"} if data["type"] == "llm" else {
+                "body": "string", "status_code": "number", "headers": "object"
+            }
+            if not isinstance(defaults, list):
+                problems.append(f"{node_id}: default_value must be a typed list")
+            else:
+                by_key = {entry.get("key"): entry for entry in defaults if isinstance(entry, dict)}
+                for key, value_type in expected.items():
+                    entry = by_key.get(key, {})
+                    if entry.get("type") != value_type or "value" not in entry:
+                        problems.append(f"{node_id}: missing {value_type} fallback for {key}")
 
     # the structure that the importer of Dify expects
     workflow = doc.get("workflow", {})
@@ -159,6 +170,10 @@ def main() -> int:
                 problems.append(f"{node_id}: a json body carries exactly one entry")
             elif items[0].get("key") not in ("", None):
                 problems.append(f"{node_id}: a json body has no key")
+        if node_id in ("ctx", "mem"):
+            expected_ref = f"{{{{#encode_{node_id}.payload#}}}}"
+            if body.get("type") != "raw-text" or body.get("data", [{}])[0].get("value") != expected_ref:
+                problems.append(f"{node_id}: request must use the serialized JSON payload")
         if not str(data.get("url", "")).startswith("http"):
             problems.append(f"{node_id}: the url {data.get('url')!r} is not a http address")
 

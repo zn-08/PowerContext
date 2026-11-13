@@ -64,7 +64,7 @@ python dify/check_dsl.py dify/npc-memory-chatflow.yml     # 期望输出：OK: n
 
 `check_dsl.py` 会检查：YAML 能解析、只有一个 start 与一个 answer、所有节点从 start 可达、
 所有 `{{#...#}}` 模板引用都有对应变量、**没有任何 `env.` 引用**、每个可能失败的节点
-（两个 HTTP 节点与 LLM 节点）都带 `error_strategy: default-value` 与同级 `default_value`——
+（两个 HTTP 节点与 LLM 节点）都带 `error_strategy: default-value` 与同级的**类型化输出列表** `default_value`——
 保证主流程不会因为外部依赖失败而中断；并且核对**导入器需要的结构**：
 `kind: app`、`app.mode: advanced-chat`、`dependencies`、`workflow.conversation_variables`、
 `workflow.environment_variables`、DSL `version` 为 `0.3.0`（Dify 1.x 导出的版本；导入器只接受
@@ -82,13 +82,13 @@ LLM 节点的 `model.provider` 与 `model.name`。
 | --- | --- | --- | --- |
 | `npc-memory-chatflow.yml` | `0.3.0` | Dify 1.x（0.3.0 是 Dify 1.x 导出的版本） | **默认用这个** |
 
-如果你的 Dify 实例报「版本不支持 / app version is too high」，说明它比 0.3.0 还新，
-把文件里的 `version: 0.3.0` 改成 `version: 0.5.0` 再导入即可——**除了这一行，工作流的节点、连线、
-提示词、字段完全一致**，不需要换别的文件。
+如果实例报告 DSL 版本不受支持，请使用与该实例兼容的 Dify 版本重新导出；不要只修改版本号，
+因为新版 DSL 还可能调整节点字段。
 
 导入顺序：先按第五节把 **seekdb + 记忆服务**跑起来，再导入 DSL，再按 4.2 绑定模型，最后发布应用。
-**导入后不需要设置任何环境变量**：两个 HTTP 节点把记忆服务地址写成了 `http://127.0.0.1:8808`，
-与 `service/start.sh` 的默认监听地址一致。
+**导入后不需要设置环境变量**。两个 HTTP 节点初始指向 `http://127.0.0.1:8808`；
+仅当 Dify 与记忆服务在同一网络命名空间时该地址才可直接使用。容器或云端 Dify 必须按第五节
+把节点 URL 改为 Dify 实际可达的记忆服务地址，再运行验证样例。
 
 ## 四、运行环境
 
@@ -185,8 +185,9 @@ curl http://127.0.0.1:8808/health
    在「工作室 → 记得你所有恶作剧的掌柜 → 预览 / API」里都能直接对话；
    也可以用应用 API（`/v1/chat-messages`）按第六节的样例调用。
 
-> 两个 HTTP Request 节点分别指向 `http://127.0.0.1:8808/context` 与 `http://127.0.0.1:8808/memory`，
-> 都用 `POST` + JSON body（玩家说的话里有空格、`&`、`#` 也不会把 URL 拼坏）。
+> 两个 HTTP Request 节点分别指向 `http://127.0.0.1:8808/context` 与 `http://127.0.0.1:8808/memory`。
+> 上游两个代码节点使用 `json.dumps` 序列化请求体，HTTP 节点用 `POST` + `Content-Type: application/json`
+> 发送原始 JSON；输入或回复中的引号、换行、反斜杠均不会破坏请求。
 > 两个 HTTP 节点各重试 3 次；失败后各自降级为一份空资料/空写入并**继续往下走**，
 > 「掌柜」节点也带了重试与 `default_value` 兜底——模型侧偶发失败也不会让整轮对话崩掉。
 
@@ -331,7 +332,7 @@ SELECT keyword, title_zh, MATCH(title, body, title_zh, body_zh, tags) AGAINST ('
 | 请求体不是合法 JSON | 返回 400 与错误信息 |
 | 模型侧超时 / 429 / 5xx | 「掌柜」节点重试 3 次（间隔 1s），仍失败则输出兜底台词继续，流程不崩 |
 | 记忆服务地址不可达 | 两个 HTTP 节点各重试 3 次；仍失败则分别降级为「空资料」与「跳过写回」，**对话流程照常走完**，掌柜仍会回话，只是没有记忆与设定可引 |
-| 玩家说的话里有空格、`&`、`#` 等特殊字符 | 两个 HTTP 节点都用 `POST` + JSON body，不拼 URL 查询串，不会被截断 |
+| 玩家输入或模型回复包含引号、换行、反斜杠、`&`、`#` | 代码节点将字段序列化为 JSON，HTTP 节点发送原始 JSON，不拼接 URL 或手工插值字段 |
 
 ## 九、已知限制
 
