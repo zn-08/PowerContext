@@ -19,6 +19,7 @@ import mysql from 'mysql2/promise';
 
 import { config } from './config.js';
 import { buildIdf, embed, termFreq, toVectorLiteral } from './embed.js';
+import { INITIAL_ROW, nextReview } from './review.js';
 
 let pool = null;
 
@@ -405,26 +406,11 @@ export async function listDueReviews(userId, limit = 10) {
 
 /** 简单 SM-2：quality 0-5 */
 export async function gradeReview(userId, docId, quality, title = '') {
-  const score = Math.max(0, Math.min(5, Number(quality)));
   const rows = await runSql(
     'SELECT ease, interval_days, reps FROM paper_review WHERE user_id = ? AND doc_id = ?',
     [userId, docId],
   );
-  const current = rows[0] || { ease: 2.5, interval_days: 0, reps: 0 };
-  let ease = Number(current.ease);
-  let reps = Number(current.reps);
-  let interval = Number(current.interval_days);
-
-  if (score >= 3) {
-    reps += 1;
-    if (reps === 1) interval = 1;
-    else if (reps === 2) interval = 3;
-    else interval = Math.max(1, Math.round(interval * ease));
-    ease = Math.max(1.3, ease + 0.1 - (5 - score) * (0.08 + (5 - score) * 0.02));
-  } else {
-    reps = 0;
-    interval = 0;
-  }
+  const { ease, reps, intervalDays: interval } = nextReview(rows[0] || INITIAL_ROW, quality);
   const dueAt = new Date(Date.now() + interval * 86400000)
     .toISOString()
     .slice(0, 19)

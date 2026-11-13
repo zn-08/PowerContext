@@ -94,8 +94,10 @@ qoder/
 │   │   └── openai.js             OpenAI 兼容的 /v1/embeddings
 │   ├── chunk.js                  段落切块
 │   ├── db.js                     seekdb 访问层：建表 / 导入 / 混合检索 / 记忆表
+│   ├── review.js                 SM-2 排期算法（纯函数，可离线单测）
 │   └── server.js                 HTTP 服务 + 静态前端
 ├── public/                       应用前端（检索 / 导入 / 复习）
+├── test/                         单元测试（Node 内置 node:test，不需要数据库）
 ├── scripts/
 │   ├── setup-db.js               建库建表 + 灌示例语料
 │   ├── selftest.js               端到端自测（产出 evidence/selftest.md）
@@ -104,7 +106,7 @@ qoder/
 ├── data/notes/                   示例语料
 ├── site/                         可发布到 Qoder Sites 的静态展示站
 └── evidence/
-    ├── selftest.md               端到端自测的真实记录
+    ├── selftest.md               端到端自测的真实记录（第 7 节是单元测试输出）
     └── screenshots/              界面截图
 ```
 
@@ -166,7 +168,14 @@ npm run selftest
 # 产出 evidence/selftest.md
 ```
 
-### 5. 本地预览展示站
+### 5. 单元测试
+
+```bash
+npm test
+# 33 条用例，只用 Node 内置的 node:test，不需要 seekdb 实例
+```
+
+### 6. 本地预览展示站
 
 ```bash
 npm run build-site   # 生成 site/snapshot.json（真实运行快照）
