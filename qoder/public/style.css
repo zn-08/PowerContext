@@ -114,6 +114,40 @@ button.primary:hover { background: #66b4ff; }
 
 .result-note { margin-top: 10px; font-size: 13px; color: var(--muted); }
 
+/* 命中高亮：底色压在暗色面板上，颜色沿用 --warn */
+mark {
+  background: #3a2f14;
+  color: var(--warn);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 600;
+}
+
+.history { margin: 2px 0 12px; }
+.history summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.history ul {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.chip {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #131927;
+  color: #c4cde4;
+}
+.chip:hover { background: #1d2740; }
+
+.card-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.card-actions button { font-size: 12px; padding: 5px 10px; }
+.card-actions button:disabled { opacity: 0.55; cursor: default; }
+.card-actions .result-note { margin: 0; }
+
 .sql-box { margin-top: 14px; }
 .sql-box summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .sql-box pre {

@@ -29,10 +29,16 @@
           </select>
           <button id="search-btn" class="primary">检索</button>
         </div>
+        <p class="hint keys">快捷键：<code>/</code> 聚焦搜索框 · <code>Esc</code> 清空 · 点「排进复习计划」把这条资料交给间隔复习。</p>
         <p class="hint">
           全文走 <code>FULLTEXT(ik)</code> 索引，向量走 <code>VECTOR(HNSW, cosine)</code> 索引，
           RRF 融合由数据库完成（<code>DBMS_HYBRID_SEARCH</code>）。
+          片段里标黄的词用的是后端同一份分词规则（<code>/tokenize.js</code>）。
         </p>
+        <details id="history-box" class="history" hidden>
+          <summary>最近检索</summary>
+          <ul id="history-list"></ul>
+        </details>
         <div id="results" class="results"></div>
         <details id="sql-box" class="sql-box" hidden>
           <summary>本次执行的 SQL（融合在库内完成）</summary>
@@ -68,6 +74,6 @@
       <p>Qoder × OceanBase 赛题作品 · 数据层：seekdb（全文索引 + 向量索引 + 混合检索 + 记忆表）</p>
     </footer>
 
-    <script src="/app.js"></script>
+    <script type="module" src="/app.js"></script>
   </body>
 </html>

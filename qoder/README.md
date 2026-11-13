@@ -20,9 +20,10 @@
 
 1. **导入**：粘贴 Markdown / 纯文本 → 按自然段落切块（带重叠）→ 写入 seekdb。
 2. **混合检索**：一句话提问 → 全文（ik）+ 向量（HNSW）两路召回 → 库内 RRF 融合 → 返回段落、出处、命中方式与名次。
-3. **检索足迹即记忆**：每次检索的提问、命中段落、分数写入 `paper_study` 表。
-4. **复习计划**：`paper_review` 表记录难度系数、复习次数与下次到期时间，界面里「今天该复习的」直接读它。
-5. **静态展示站**：`site/` 是可直接发布到 Qoder Sites 的展示页，演示数据来自真实 seekdb 运行快照。
+3. **检索足迹即记忆**：每次检索的提问、命中段落、分数写入 `paper_study` 表；界面上的「最近检索」下拉直接读它（`GET /api/history?user=`，去重取最近 10 条）。
+4. **结果即读即判**：片段里命中的词用 `<mark>` 标黄，分词规则来自 `src/tokenize.js`——前端通过 `/tokenize.js` 加载同一个文件，标出来的就是数据库真正参与打分的词；卡片上的「排进复习计划」直接调用 `POST /api/review/schedule`。快捷键 `/` 聚焦搜索框、`Esc` 清空。
+5. **复习计划**：`paper_review` 表记录难度系数、复习次数与下次到期时间，界面里「今天该复习的」直接读它。
+6. **静态展示站**：`site/` 是可直接发布到 Qoder Sites 的展示页，演示数据来自真实 seekdb 运行快照。
 
 ## 三、技术结合：seekdb 具体做了什么
 
@@ -93,6 +94,7 @@ qoder/
 │   │   ├── local.js              本地特征哈希 TF-IDF 向量（默认，零依赖）
 │   │   └── openai.js             OpenAI 兼容的 /v1/embeddings
 │   ├── chunk.js                  段落切块
+│   ├── tokenize.js               分词 + 停用词（后端算词袋、前端做命中高亮，共用同一份）
 │   ├── db.js                     seekdb 访问层：建表 / 导入 / 混合检索 / 记忆表
 │   ├── review.js                 SM-2 排期算法（纯函数，可离线单测）
 │   └── server.js                 HTTP 服务 + 静态前端
@@ -209,6 +211,8 @@ node scripts/serve-site.js 5175
 | GET | `/api/docs` | 已入库段落列表 |
 | POST | `/api/ingest` | `{title, source, text, userId}` → 切块入库 |
 | POST | `/api/search` | `{query, topK, mode, userId}` → 混合检索结果 + 实际 SQL |
+| GET | `/api/history?user=` | 该用户最近 10 条去重提问（读 `paper_study` 足迹） |
+| GET | `/tokenize.js` | 前后端共用的分词模块，界面高亮与后端打分同一套规则 |
 | GET | `/api/review/due?user=` | 到期的复习条目 |
 | POST | `/api/review/schedule` | 把段落排进复习计划 |
 | POST | `/api/review/grade` | `{userId, docId, quality}` → SM-2 打分 |

@@ -18,6 +18,7 @@ import {
   ingest,
   listDocs,
   listDueReviews,
+  recentQueries,
   scheduleReview,
   search,
   stats,
@@ -25,6 +26,12 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, '..', 'public');
+
+/**
+ * 前后端共用的纯模块：浏览器按固定名字加载，路径来自这张表而不是请求参数，
+ * 所以不会因为多一个静态路由就把 src/ 暴露出去。
+ */
+const SHARED_MODULES = new Map([['/tokenize.js', path.resolve(__dirname, 'tokenize.js')]]);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -58,13 +65,7 @@ async function readBody(request) {
   }
 }
 
-async function serveStatic(request, response, pathname) {
-  const relative = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
-  const target = path.resolve(PUBLIC_DIR, relative);
-  if (!target.startsWith(PUBLIC_DIR)) {
-    sendJson(response, 403, { ok: false, error: 'forbidden' });
-    return;
-  }
+async function sendFile(response, target) {
   try {
     const data = await fs.readFile(target);
     response.writeHead(200, {
@@ -76,6 +77,16 @@ async function serveStatic(request, response, pathname) {
     response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     response.end('404 Not Found');
   }
+}
+
+async function serveStatic(request, response, pathname) {
+  const relative = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  const target = path.resolve(PUBLIC_DIR, relative);
+  if (!target.startsWith(PUBLIC_DIR)) {
+    sendJson(response, 403, { ok: false, error: 'forbidden' });
+    return;
+  }
+  await sendFile(response, target);
 }
 
 /** 把一份资料切成块并入库 */
@@ -151,6 +162,12 @@ async function handleApi(request, response, url) {
     return;
   }
 
+  if (pathname === '/api/history' && request.method === 'GET') {
+    const userId = url.searchParams.get('user') || 'demo';
+    sendJson(response, 200, { ok: true, user: userId, history: await recentQueries(userId) });
+    return;
+  }
+
   if (pathname === '/api/review/due' && request.method === 'GET') {
     const userId = url.searchParams.get('user') || 'demo';
     sendJson(response, 200, { ok: true, due: await listDueReviews(userId) });
@@ -189,6 +206,11 @@ export function createServer() {
     try {
       if (url.pathname.startsWith('/api/')) {
         await handleApi(request, response, url);
+        return;
+      }
+      const shared = SHARED_MODULES.get(url.pathname);
+      if (shared) {
+        await sendFile(response, shared);
         return;
       }
       await serveStatic(request, response, url.pathname);

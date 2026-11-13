@@ -386,6 +386,23 @@ export async function search({ query, topK = config.topK, mode = config.searchMo
   return { ...result, hits, rows: hits, elapsedMs: Date.now() - started };
 }
 
+/**
+ * 某个用户最近用过的提问（去重，按最后一次检索倒序）。
+ * 数据就是检索足迹表 paper_study，不另建一份前端状态。
+ */
+export async function recentQueries(userId, limit = 10) {
+  const rows = await runSql(
+    `SELECT query_text, MAX(id) AS last_id
+       FROM paper_study
+      WHERE user_id = ? AND query_text IS NOT NULL AND query_text <> ''
+      GROUP BY query_text
+      ORDER BY last_id DESC
+      LIMIT ?`,
+    [userId, Number(limit)],
+  );
+  return rows.map((row) => String(row.query_text));
+}
+
 /* ------------------------------------------------------------------ *
  * 复习计划（记忆）
  * ------------------------------------------------------------------ */
