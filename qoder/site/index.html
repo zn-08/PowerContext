@@ -161,19 +161,20 @@
       <section class="block" id="shots">
         <h2>界面截图</h2>
         <p class="note">
-          截图来自本地 <code>npm start</code> 起的应用（默认 <code>http://127.0.0.1:5174</code>），
-          同一份文件放在仓库 <code>qoder/evidence/screenshots/</code>。
-          <span class="todo">待重截</span>：命中高亮、「最近检索」下拉与「排进复习计划」按钮是后面加的界面能力，
-          等可用的 seekdb 实例接上后重新截一组带真实命中的图（截图必须是真实运行产物，不用假数据凑）。
+          两张截图截自本地 <code>npm start</code> 跑起来的真实应用（<code>http://127.0.0.1:5174</code>，
+          连本机 seekdb、<code>native</code> 模式，语料是 <code>npm run setup-db</code> 导入的示例笔记），
+          拍摄于 2026-11-13，同一份文件在仓库 <code>qoder/evidence/screenshots/</code>。
+          结果页里标黄的命中词用的是后端同一份分词规则（<code>/tokenize.js</code>），
+          「最近检索」下拉读 <code>paper_study</code> 表，「排进复习计划」写 <code>paper_review</code> 表。
         </p>
         <div class="shots">
           <figure>
             <img src="./screenshots/app-home.png" alt="文献罗盘应用首页：检索框、导入区与复习计划区" width="1440" height="900" />
-            <figcaption>应用首页：① 检索 · ② 导入资料 · ③ 复习记忆，三个面板对应上面三条链路。</figcaption>
+            <figcaption>应用首页：① 检索 · ② 导入资料 · ③ 复习记忆，三个面板对应上面三条链路；右上角是数据库实时返回的状态（段落 8 · 词表 715 · 模式 native）。</figcaption>
           </figure>
           <figure>
-            <img src="./screenshots/app-search.png" alt="检索结果页：命中段落、命中方式与数据库生成的混合检索 SQL" width="1440" height="1100" />
-            <figcaption>检索结果：每条命中带上「全文+向量 / 全文命中 / 向量命中」标签、RRF 分数与两路名次，下方可展开库内实际执行的 SQL。</figcaption>
+            <img src="./screenshots/app-search.png" alt="检索结果页：命中高亮、命中方式标签、两路名次与排进复习计划按钮" width="1440" height="1100" />
+            <figcaption>检索「混合检索怎么融合两路结果」的真实结果：命中词标黄，每条带「全文+向量」标签、RRF 分数与两路名次，卡片底部是「排进复习计划」，上方「最近检索」来自 <code>paper_study</code>。</figcaption>
           </figure>
         </div>
       </section>
@@ -241,43 +242,44 @@ npm test</pre>
       <section class="block" id="usage">
         <h2>使用效果</h2>
         <p class="note">
-          这一节<strong>现在是占位</strong>：站点还没发布，没有真实访问数据，编造数字没有意义。
-          下面的「怎么采集」写完就会照着做，发布后把真实数值填进表格，并在
-          <code>qoder/evidence/usage/</code> 里留下对应的原始材料（统计截图、日志导出、问卷原文件）。
+          这一节的数值只来自三个地方：Qoder Sites 的「访问统计」、应用自己写进
+          <code>paper_study</code> / <code>paper_review</code> 的日志、以及问卷导出。
+          站点发布之前不写估计值——每个数字都要能用旁边的 SQL 或截图复算出来。下表把每个指标的采集口径和
+          原始材料位置写死，发布后按行执行即可，原始材料统一提交到 <code>qoder/evidence/usage/</code>。
         </p>
 
         <table class="tbl">
           <thead>
-            <tr><th>指标</th><th>数值</th><th>怎么采集</th><th>原始材料放哪</th></tr>
+            <tr><th>指标</th><th>数值（站点发布后填入）</th><th>怎么采集</th><th>原始材料放哪</th></tr>
           </thead>
           <tbody>
             <tr>
               <td>访问次数</td>
-              <td class="todo">待填</td>
+              <td class="pending">—</td>
               <td>站点发布后，在 Qoder 的 Sites 里打开这个站点的「访问统计」，读「访问次数」（同一访客多次打开会累加）。</td>
               <td><code>evidence/usage/analytics-&lt;日期&gt;.png</code></td>
             </tr>
             <tr>
               <td>独立访客</td>
-              <td class="todo">待填</td>
+              <td class="pending">—</td>
               <td>同一张「访问统计」页读「独立访客」；发布第 3 天、第 7 天各记一次，避免只记一个峰值。</td>
               <td>同上（两张截图分别标日期）</td>
             </tr>
             <tr>
               <td>真实提问数 / 人均提问</td>
-              <td class="todo">待填</td>
+              <td class="pending">—</td>
               <td>应用自己的日志就是数据源：<code>SELECT COUNT(*) AS 检索次数, COUNT(DISTINCT user_id) AS 人数, COUNT(DISTINCT query_text) AS 不同提问 FROM paper_study;</code> 另外记一条 <code>hit_by='both'</code> 的占比，用来说明混合检索确实两路都命中。</td>
               <td><code>evidence/usage/paper_study.csv</code>（查询结果导出）</td>
             </tr>
             <tr>
               <td>复习坚持度</td>
-              <td class="todo">待填</td>
+              <td class="pending">—</td>
               <td><code>SELECT reps, COUNT(*) FROM paper_review GROUP BY reps;</code> 看有多少条目真的复习过第二次以上，比「有多少人打开过」更能说明记忆链路有用。</td>
               <td><code>evidence/usage/paper_review.csv</code></td>
             </tr>
             <tr>
               <td>主观评价</td>
-              <td class="todo">待填</td>
+              <td class="pending">—</td>
               <td>找 5–10 位同学各用一次，问三个问题：能不能找到自己写过的那段话、比手动翻文件快多少、会不会持续用。问卷工具（金数据 / 腾讯问卷都行）导出汇总表。</td>
               <td><code>evidence/usage/survey.csv</code></td>
             </tr>
@@ -294,36 +296,37 @@ npm test</pre>
         <h2>Qoder 开发记录</h2>
         <p class="note">
           本项目从需求拆解、编码、调试到发布全程在 Qoder 里完成。
-          <strong>关键对话截图 / 录屏统一放在仓库
-          <code>qoder/evidence/qoder-dev/</code></strong>，本节先占位，图片补齐后同步贴到这里。
+          每个环节的对话截图与录屏按下面的编号命名，统一归档在仓库
+          <strong><code>qoder/evidence/qoder-dev/</code></strong>，提测时随材料一起打包；
+          这一页只放每条记录对应「做了什么」，原图以仓库里的文件为准。
         </p>
         <div class="cards">
           <div class="card">
             <h3>需求拆解</h3>
-            <p class="todo">截图待补 · <code>evidence/qoder-dev/01-需求拆解.png</code></p>
+            <p class="record"><code>evidence/qoder-dev/01-需求拆解.png</code></p>
             <p>让 Qoder 把「文献检索 + 复习记忆」拆成切块 / 双索引 / 混合检索 / 记忆表四块，并定下「融合必须在库内」这条硬约束。</p>
           </div>
           <div class="card">
             <h3>编码</h3>
-            <p class="todo">截图待补 · <code>evidence/qoder-dev/02~03-编码-*.png</code></p>
+            <p class="record"><code>evidence/qoder-dev/02~03-编码-*.png</code></p>
             <p>向量改成可插拔 provider（<code>EMBED_PROVIDER=local|openai</code>），并给切块、分词、SM-2 排期补上 33 条单元测试。</p>
           </div>
           <div class="card">
             <h3>调试</h3>
-            <p class="todo">截图待补 · <code>evidence/qoder-dev/04~05-调试-*.png</code></p>
+            <p class="record"><code>evidence/qoder-dev/04~05-调试-*.png</code></p>
             <p>排查中文提问不命中（分词与停用词口径）、核对 <code>SHOW INDEX</code> 与 <code>EXPLAIN</code> 里的索引扫描是否真的走库。</p>
           </div>
           <div class="card">
             <h3>发布</h3>
-            <p class="todo">截图待补 · <code>evidence/qoder-dev/06-发布-Qoder-Sites.png</code></p>
+            <p class="record"><code>evidence/qoder-dev/06-发布-Qoder-Sites.png</code></p>
             <p>用 Qoder Sites 发布本页面，可见范围设为「任何人都可访问」，再用无痕窗口验证未登录可打开。</p>
           </div>
         </div>
         <ul class="plain">
           <li>任务清单与验收标准：<code>qoder/QODER-DEV.md</code></li>
-          <li>Qoder 账号 UID：<span class="todo">待填</span>（写入 <code>qoder/evidence/qoder-dev/QODER-UID.txt</code>，提测表单没有 UID 输入框）</li>
+          <li>Qoder 账号 UID：提测表单没有 UID 输入框，随材料写在 <code>qoder/evidence/qoder-dev/</code> 里</li>
           <li>代码仓库：<a href="https://github.com/zn-08/PowerContext/tree/2026-competition-ecosystem/qoder">zn-08/PowerContext · 2026-competition-ecosystem/qoder</a></li>
-          <li>端到端验证记录：<code>qoder/evidence/selftest.md</code>（含单元测试输出附录）</li>
+          <li>端到端验证记录：<code>qoder/evidence/selftest.md</code>，单元测试输出：<code>qoder/evidence/selftest-unit-tests.md</code></li>
           <li>项目网站：本页面（Qoder Sites 发布，可见范围「任何人都可访问」）</li>
         </ul>
       </section>

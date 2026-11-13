@@ -259,8 +259,8 @@ html { scroll-behavior: smooth; }
 .shots figcaption { color: var(--muted); font-size: 13px; margin-top: 10px; }
 
 /* ---------- 还没填真实数据的格子 ---------- */
-.todo { color: var(--warn); font-weight: 600; }
-td.todo { background: #191509; }
+.pending { color: var(--muted); text-align: center; }
+.record { font-size: 13px; color: var(--muted); }
 
 footer { text-align: center; color: var(--muted); font-size: 13px; padding: 26px 16px 40px; }
 footer .small { font-size: 12px; }

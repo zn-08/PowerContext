@@ -63,7 +63,8 @@ npm install && npm run setup-db && npm run selftest
 3. qoder/test/review.test.js：覆盖 SM-2 的打分逻辑（quality<3 重置、quality>=3 间隔递增、
    ease 下限 1.3）
 4. 在 package.json 里加 "test": "node --test test/"
-5. 运行 npm test，把输出贴进 qoder/evidence/selftest.md 的附录
+5. 运行 npm test，把完整输出存进 qoder/evidence/selftest-unit-tests.md
+   （不要写进 selftest.md 的附录：`npm run selftest` 每次都会重写那个文件）
 ```
 
 **验收标准**：`npm test` 全绿，测试数量 ≥ 12 条。

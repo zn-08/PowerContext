@@ -49,7 +49,7 @@ async function main() {
 
   out('# 文献罗盘 PaperCompass · 端到端自测记录');
   out();
-  out(`- 执行时间：${process.env.EVIDENCE_TIME || '2026-11-10'}`);
+  out(`- 执行时间：${process.env.EVIDENCE_TIME || new Date().toISOString().slice(0, 10)}`);
   out(`- Node：${process.version}`);
   out(`- seekdb：${config.db.host}:${config.db.port}/${config.db.database}`);
   out(`- 检索模式：${config.searchMode}（sql 为等价降级路径），向量维度 ${config.dim}`);
@@ -170,6 +170,10 @@ async function main() {
   out('```');
   out(JSON.stringify(await stats(), null, 2));
   out('```');
+  out();
+
+  // 单元测试输出单独存档：这个文件每次 selftest 都会重写，写在附录里会被覆盖掉
+  out('- 单元测试输出见 evidence/selftest-unit-tests.md');
 
   const output = process.argv[2] || path.join(ROOT, 'evidence', 'selftest.md');
   await fs.mkdir(path.dirname(output), { recursive: true });

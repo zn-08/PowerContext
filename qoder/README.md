@@ -110,7 +110,8 @@ qoder/
 ├── data/notes/                   示例语料
 ├── site/                         可发布到 Qoder Sites 的静态展示站
 └── evidence/
-    ├── selftest.md               端到端自测的真实记录（第 7 节是单元测试输出）
+    ├── selftest.md               端到端自测的真实记录（`npm run selftest` 每次重写）
+    ├── selftest-unit-tests.md    单元测试输出（`npm test` 的完整输出，独立存档避免被覆盖）
     ├── screenshots/              界面截图
     ├── qoder-dev/                Qoder 开发记录截图 / 录屏 + 账号 UID
     └── usage/                    使用效果的原始材料（访问统计截图、日志导出、问卷）
@@ -179,6 +180,7 @@ npm run selftest
 ```bash
 npm test
 # 33 条用例，只用 Node 内置的 node:test，不需要 seekdb 实例
+# 完整输出存档在 evidence/selftest-unit-tests.md
 ```
 
 ### 6. 本地预览展示站
@@ -209,6 +211,7 @@ node scripts/serve-site.js 5175
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `320` / `80` | 切块长度与重叠 |
 | `SEARCH_MODE` | `native` | `native` = `DBMS_HYBRID_SEARCH`；`sql` = 手写单条 RRF（等价降级路径） |
 | `TOP_K` | `8` | 默认返回条数 |
+| `EVIDENCE_TIME` | 当天日期 | 只影响 `evidence/selftest.md` 首行的「执行时间」标注；不设置时取真实运行日期 |
 
 ### HTTP 接口
 

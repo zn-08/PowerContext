@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-11-10T04:58:05.939Z",
+  "generatedAt": "2026-11-13T09:14:48.968Z",
   "stats": {
     "docs": 8,
     "terms": 715,
-    "studies": 51,
+    "studies": 39,
     "reviews": 1,
     "dim": 384,
     "mode": "native"
