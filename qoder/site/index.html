@@ -28,6 +28,14 @@
     </header>
 
     <main>
+      <nav class="toc" aria-label="页面目录">
+        <a href="#arch">架构</a>
+        <a href="#demo">效果演示</a>
+        <a href="#shots">界面截图</a>
+        <a href="#usage">使用效果</a>
+        <a href="#run">运行说明</a>
+        <a href="#devlog">Qoder 开发记录</a>
+      </nav>
       <section class="block">
         <h2>解决的痛点</h2>
         <div class="cards">
@@ -51,17 +59,92 @@
         <div class="cards">
           <div class="card">
             <h3>① 混合检索</h3>
-            <p>段落级切块后同时写入全文索引与向量索引，查询走一条混合检索 SQL，全文与向量两路结果由数据库用 RRF 融合，客户端不拼合。</p>
+            <p>段落级切块后同时写入全文索引与向量索引，查询走一条混合检索 SQL，全文与向量两路结果由数据库用 RRF 融合，客户端不拼合。片段里命中的词会标黄，用的就是后端那份分词规则。</p>
           </div>
           <div class="card">
             <h3>② 检索足迹即记忆</h3>
-            <p>每次检索的提问、命中段落与分数都落进 <code>paper_study</code> 表，检索历史就是可查询的数据，而不是浏览器缓存。</p>
+            <p>每次检索的提问、命中段落与分数都落进 <code>paper_study</code> 表，检索历史就是可查询的数据，而不是浏览器缓存——搜索框下面的「最近检索」下拉读的就是它。</p>
           </div>
           <div class="card">
             <h3>③ 复习计划</h3>
             <p>把资料排进复习计划，按 SM-2 简化算法打分，到期的条目会出现在「今天该复习的」里，间隔自动拉长。</p>
           </div>
         </div>
+      </section>
+
+      <section class="block" id="arch">
+        <h2>架构 · 一次提问发生了什么</h2>
+        <p class="note">
+          整条链路只有三个角色，<strong>相似度计算与结果融合都不在应用进程里做</strong>：
+          浏览器发一句话，Node 服务只负责组装一条 SQL，召回与融合交给 seekdb 的索引。
+        </p>
+
+        <div class="flow">
+          <div class="node">
+            <span class="step">① 浏览器</span>
+            <h3>页面 public/</h3>
+            <p>一句提问 → 一条 <code>POST /api/search</code>。<br />没有内存索引，也没有本地向量。</p>
+          </div>
+          <div class="arrow" aria-hidden="true"></div>
+          <div class="node">
+            <span class="step">② Node 服务</span>
+            <h3>src/server.js + db.js</h3>
+            <p>取词表算 IDF、把提问编成查询向量（<strong>本地特征哈希，无需 API Key</strong>），拼出<strong>一条</strong>检索 SQL。</p>
+          </div>
+          <div class="arrow" aria-hidden="true"></div>
+          <div class="node seekdb">
+            <span class="step">③ seekdb（MySQL 协议 :2881）</span>
+            <h3>召回 → 融合 → 返回，全在库内</h3>
+            <div class="lanes">
+              <div class="lane">
+                <span class="lane-t">FULLTEXT（ik 分词）</span>
+                <code>MATCH(body) AGAINST(...)</code>
+                <span class="lane-o">→ 全文名次</span>
+              </div>
+              <div class="lane">
+                <span class="lane-t">VECTOR（HNSW / cosine）</span>
+                <code>emb VECTOR(384)</code>
+                <span class="lane-o">→ 向量名次</span>
+              </div>
+            </div>
+            <p class="funnel">↓ 两路名次在库内合并，只回一条结果集 ↓</p>
+            <div class="merge">
+              <code>DBMS_HYBRID_SEARCH.GET_SQL()</code>
+              <strong>RRF 融合</strong>
+              <span>Top-K 段落 + 两路名次 + 实际执行的 SQL 一起回给浏览器</span>
+            </div>
+          </div>
+        </div>
+        <p class="back">
+          ↩ 返回 <code>{hits, sql, elapsedMs}</code>：页面直接渲染名次与 SQL，客户端不做任何融合计算
+        </p>
+
+        <h3 class="sub">写进去的路径也一样：一条资料落到四张表</h3>
+        <div class="flow compact">
+          <div class="node">
+            <span class="step">导入</span>
+            <p>粘贴 Markdown / 纯文本 → <code>chunk.js</code> 按自然段切块（带重叠）。</p>
+          </div>
+          <div class="arrow" aria-hidden="true"></div>
+          <div class="node">
+            <span class="step">索引</span>
+            <p><code>paper_doc</code>：正文进 FULLTEXT 索引，<code>emb</code> 进 VECTOR 索引。</p>
+          </div>
+          <div class="arrow" aria-hidden="true"></div>
+          <div class="node">
+            <span class="step">词表</span>
+            <p><code>paper_doc_term</code> / <code>paper_term</code>：<code>df</code> 由 SQL 聚合，下次查询用它算 IDF。</p>
+          </div>
+          <div class="arrow" aria-hidden="true"></div>
+          <div class="node">
+            <span class="step">记忆</span>
+            <p><code>paper_study</code> 存检索足迹，<code>paper_review</code> 按 SM-2 存下次到期时间。</p>
+          </div>
+        </div>
+        <p class="note">
+          这张图没有画外部依赖：没有向量数据库、没有 embedding 服务、没有搜索引擎中间件，
+          <code>package.json</code> 里只有 <code>mysql2</code> 一个运行时依赖。
+        </p>
       </section>
 
       <section class="block" id="demo">
@@ -75,6 +158,26 @@
         <div id="demo-out" class="demo-out"></div>
       </section>
 
+      <section class="block" id="shots">
+        <h2>界面截图</h2>
+        <p class="note">
+          截图来自本地 <code>npm start</code> 起的应用（默认 <code>http://127.0.0.1:5174</code>），
+          同一份文件放在仓库 <code>qoder/evidence/screenshots/</code>。
+          <span class="todo">待重截</span>：命中高亮、「最近检索」下拉与「排进复习计划」按钮是后面加的界面能力，
+          等可用的 seekdb 实例接上后重新截一组带真实命中的图（截图必须是真实运行产物，不用假数据凑）。
+        </p>
+        <div class="shots">
+          <figure>
+            <img src="./screenshots/app-home.png" alt="文献罗盘应用首页：检索框、导入区与复习计划区" width="1440" height="900" />
+            <figcaption>应用首页：① 检索 · ② 导入资料 · ③ 复习记忆，三个面板对应上面三条链路。</figcaption>
+          </figure>
+          <figure>
+            <img src="./screenshots/app-search.png" alt="检索结果页：命中段落、命中方式与数据库生成的混合检索 SQL" width="1440" height="1100" />
+            <figcaption>检索结果：每条命中带上「全文+向量 / 全文命中 / 向量命中」标签、RRF 分数与两路名次，下方可展开库内实际执行的 SQL。</figcaption>
+          </figure>
+        </div>
+      </section>
+
       <section class="block">
         <h2>技术结合：seekdb 到底做了什么</h2>
         <table class="tbl">
@@ -85,7 +188,7 @@
             <tr><td>全文索引（ik 分词）</td><td>段落正文的 <code>MATCH(body) AGAINST (...)</code> 精确命中</td><td><code>SHOW INDEX FROM paper_doc</code> 可见 <code>ft_paper_doc_body</code></td></tr>
             <tr><td>向量索引（HNSW / cosine）</td><td>段落向量 <code>emb VECTOR(384)</code>，查询向量按 IDF 加权</td><td><code>EXPLAIN</code> 显示 <code>VECTOR INDEX SCAN</code></td></tr>
             <tr><td>混合检索</td><td><code>DBMS_HYBRID_SEARCH.GET_SQL()</code> 生成单条 SQL，RRF 在库内融合</td><td>页面「本次执行的 SQL」折叠区</td></tr>
-            <tr><td>记忆表</td><td><code>paper_study</code>（检索足迹）、<code>paper_review</code>（复习计划）、<code>paper_term</code>（词表与 IDF）</td><td>页脚附数据库结构</td></tr>
+            <tr><td>记忆表</td><td><code>paper_study</code>（检索足迹）、<code>paper_review</code>（复习计划）、<code>paper_term</code>（词表与 IDF）</td><td>见上面「架构」一节的落库路径，或 <code>SHOW TABLES</code></td></tr>
           </tbody>
         </table>
       </section>
@@ -105,13 +208,19 @@ npm start
 # 打开 http://127.0.0.1:5174
 
 # 4. 端到端自测（同时产出 evidence/selftest.md）
-npm run selftest</pre>
+npm run selftest
+
+# 5. 单元测试（Node 内置 node:test，不需要数据库）
+npm test</pre>
         <p class="note">
           环境变量：<code>SEEKDB_HOST</code> / <code>SEEKDB_PORT</code> / <code>SEEKDB_USER</code> /
           <code>SEEKDB_PASSWORD</code> / <code>SEEKDB_DATABASE</code> / <code>PORT</code> /
           <code>EMBED_DIM</code> / <code>SEARCH_MODE</code>（<code>native</code> 或 <code>sql</code>）。
-          向量是<strong>完全本地</strong>的特征哈希 TF-IDF 向量，不需要模型下载、不需要 API Key，
-          评审环境不会有额外前置依赖。
+          默认 <code>EMBED_PROVIDER=local</code>：向量是<strong>完全本地</strong>的特征哈希 TF-IDF，
+          不需要模型下载、不需要 API Key，评审环境不会有额外前置依赖。
+          想换成真 embedding 时设 <code>EMBED_PROVIDER=openai</code>，再给
+          <code>EMBED_API_KEY</code> / <code>EMBED_BASE_URL</code> / <code>EMBED_MODEL</code>，
+          并把 <code>EMBED_DIM</code> 与 <code>paper_doc.emb</code> 的维度对齐（不一致会在启动时报错）。
         </p>
       </section>
 
@@ -129,12 +238,92 @@ npm run selftest</pre>
         <p class="note">完整实测记录见仓库 <code>qoder/evidence/selftest.md</code>。</p>
       </section>
 
-      <section class="block">
-        <h2>开发记录与提交信息</h2>
+      <section class="block" id="usage">
+        <h2>使用效果</h2>
+        <p class="note">
+          这一节<strong>现在是占位</strong>：站点还没发布，没有真实访问数据，编造数字没有意义。
+          下面的「怎么采集」写完就会照着做，发布后把真实数值填进表格，并在
+          <code>qoder/evidence/usage/</code> 里留下对应的原始材料（统计截图、日志导出、问卷原文件）。
+        </p>
+
+        <table class="tbl">
+          <thead>
+            <tr><th>指标</th><th>数值</th><th>怎么采集</th><th>原始材料放哪</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>访问次数</td>
+              <td class="todo">待填</td>
+              <td>站点发布后，在 Qoder 的 Sites 里打开这个站点的「访问统计」，读「访问次数」（同一访客多次打开会累加）。</td>
+              <td><code>evidence/usage/analytics-&lt;日期&gt;.png</code></td>
+            </tr>
+            <tr>
+              <td>独立访客</td>
+              <td class="todo">待填</td>
+              <td>同一张「访问统计」页读「独立访客」；发布第 3 天、第 7 天各记一次，避免只记一个峰值。</td>
+              <td>同上（两张截图分别标日期）</td>
+            </tr>
+            <tr>
+              <td>真实提问数 / 人均提问</td>
+              <td class="todo">待填</td>
+              <td>应用自己的日志就是数据源：<code>SELECT COUNT(*) AS 检索次数, COUNT(DISTINCT user_id) AS 人数, COUNT(DISTINCT query_text) AS 不同提问 FROM paper_study;</code> 另外记一条 <code>hit_by='both'</code> 的占比，用来说明混合检索确实两路都命中。</td>
+              <td><code>evidence/usage/paper_study.csv</code>（查询结果导出）</td>
+            </tr>
+            <tr>
+              <td>复习坚持度</td>
+              <td class="todo">待填</td>
+              <td><code>SELECT reps, COUNT(*) FROM paper_review GROUP BY reps;</code> 看有多少条目真的复习过第二次以上，比「有多少人打开过」更能说明记忆链路有用。</td>
+              <td><code>evidence/usage/paper_review.csv</code></td>
+            </tr>
+            <tr>
+              <td>主观评价</td>
+              <td class="todo">待填</td>
+              <td>找 5–10 位同学各用一次，问三个问题：能不能找到自己写过的那段话、比手动翻文件快多少、会不会持续用。问卷工具（金数据 / 腾讯问卷都行）导出汇总表。</td>
+              <td><code>evidence/usage/survey.csv</code></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="note">
+          填表时请保持可核对：数值旁边注明统计截止时间与样本量（例如「独立访客 23 · 截至 11-20」），
+          所有截图与导出文件都提交到仓库，别只留一个好看的数字。
+        </p>
+      </section>
+
+      <section class="block" id="devlog">
+        <h2>Qoder 开发记录</h2>
+        <p class="note">
+          本项目从需求拆解、编码、调试到发布全程在 Qoder 里完成。
+          <strong>关键对话截图 / 录屏统一放在仓库
+          <code>qoder/evidence/qoder-dev/</code></strong>，本节先占位，图片补齐后同步贴到这里。
+        </p>
+        <div class="cards">
+          <div class="card">
+            <h3>需求拆解</h3>
+            <p class="todo">截图待补 · <code>evidence/qoder-dev/01-需求拆解.png</code></p>
+            <p>让 Qoder 把「文献检索 + 复习记忆」拆成切块 / 双索引 / 混合检索 / 记忆表四块，并定下「融合必须在库内」这条硬约束。</p>
+          </div>
+          <div class="card">
+            <h3>编码</h3>
+            <p class="todo">截图待补 · <code>evidence/qoder-dev/02~03-编码-*.png</code></p>
+            <p>向量改成可插拔 provider（<code>EMBED_PROVIDER=local|openai</code>），并给切块、分词、SM-2 排期补上 33 条单元测试。</p>
+          </div>
+          <div class="card">
+            <h3>调试</h3>
+            <p class="todo">截图待补 · <code>evidence/qoder-dev/04~05-调试-*.png</code></p>
+            <p>排查中文提问不命中（分词与停用词口径）、核对 <code>SHOW INDEX</code> 与 <code>EXPLAIN</code> 里的索引扫描是否真的走库。</p>
+          </div>
+          <div class="card">
+            <h3>发布</h3>
+            <p class="todo">截图待补 · <code>evidence/qoder-dev/06-发布-Qoder-Sites.png</code></p>
+            <p>用 Qoder Sites 发布本页面，可见范围设为「任何人都可访问」，再用无痕窗口验证未登录可打开。</p>
+          </div>
+        </div>
         <ul class="plain">
-          <li>Qoder 开发记录（对话截图 / 录屏）：见仓库 <code>qoder/QODER-DEV.md</code></li>
-          <li>Qoder 账号 UID：<code>待填</code></li>
+          <li>任务清单与验收标准：<code>qoder/QODER-DEV.md</code></li>
+          <li>Qoder 账号 UID：<span class="todo">待填</span>（写入 <code>qoder/evidence/qoder-dev/QODER-UID.txt</code>，提测表单没有 UID 输入框）</li>
           <li>代码仓库：<a href="https://github.com/zn-08/PowerContext/tree/2026-competition-ecosystem/qoder">zn-08/PowerContext · 2026-competition-ecosystem/qoder</a></li>
+          <li>端到端验证记录：<code>qoder/evidence/selftest.md</code>（含单元测试输出附录）</li>
           <li>项目网站：本页面（Qoder Sites 发布，可见范围「任何人都可访问」）</li>
         </ul>
       </section>

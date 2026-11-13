@@ -23,7 +23,9 @@
 3. **检索足迹即记忆**：每次检索的提问、命中段落、分数写入 `paper_study` 表；界面上的「最近检索」下拉直接读它（`GET /api/history?user=`，去重取最近 10 条）。
 4. **结果即读即判**：片段里命中的词用 `<mark>` 标黄，分词规则来自 `src/tokenize.js`——前端通过 `/tokenize.js` 加载同一个文件，标出来的就是数据库真正参与打分的词；卡片上的「排进复习计划」直接调用 `POST /api/review/schedule`。快捷键 `/` 聚焦搜索框、`Esc` 清空。
 5. **复习计划**：`paper_review` 表记录难度系数、复习次数与下次到期时间，界面里「今天该复习的」直接读它。
-6. **静态展示站**：`site/` 是可直接发布到 Qoder Sites 的展示页，演示数据来自真实 seekdb 运行快照。
+6. **静态展示站**：`site/` 是可直接发布到 Qoder Sites 的展示页（纯静态、无外链资源依赖），
+   含「架构」数据流图、「效果演示」（真实 seekdb 运行快照）、「界面截图」、「使用效果」
+   （占位 + 真实数据的采集方法）与「Qoder 开发记录」。
 
 ## 三、技术结合：seekdb 具体做了什么
 
@@ -109,7 +111,9 @@ qoder/
 ├── site/                         可发布到 Qoder Sites 的静态展示站
 └── evidence/
     ├── selftest.md               端到端自测的真实记录（第 7 节是单元测试输出）
-    └── screenshots/              界面截图
+    ├── screenshots/              界面截图
+    ├── qoder-dev/                Qoder 开发记录截图 / 录屏 + 账号 UID
+    └── usage/                    使用效果的原始材料（访问统计截图、日志导出、问卷）
 ```
 
 ## 五、运行说明
@@ -180,10 +184,14 @@ npm test
 ### 6. 本地预览展示站
 
 ```bash
-npm run build-site   # 生成 site/snapshot.json（真实运行快照）
+npm run build-site   # 生成 site/snapshot.json（真实运行快照，需要能连到 seekdb）
 node scripts/serve-site.js 5175
 # 打开 http://127.0.0.1:5175
 ```
+
+`site/` 是纯静态目录（`index.html` / `style.css` / `site.js` / `snapshot.json` / `screenshots/`），
+没有构建步骤、页面不加载任何第三方资源；没有 seekdb 时直接跑 `serve-site.js` 也能看，
+演示区读的是仓库里已提交的快照。
 
 ### 环境变量
 
