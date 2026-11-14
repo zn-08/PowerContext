@@ -18,10 +18,10 @@ from __future__ import annotations
 
 import hashlib
 import io
-import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from itertools import pairwise
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
@@ -47,81 +47,312 @@ _MAX_QUOTED_DOCUMENT_ID = 160
 _MAX_PAGE_NUMBER_DIGITS = 20
 
 _TOKEN = re.compile(r"[0-9a-z]+")
+_NUMBER = re.compile(r"[0-9][0-9.,]*")
 
-# Retrieval tuning. The values are deliberately generic: they rank one page against
+# Retrieval tuning.  The values are deliberately generic: they rank one page against
 # another for one question and never encode a document, a page or an answer.
-_SEARCH_HARVEST_LIMIT = 128
+_SEARCH_PROBE_LIMIT = 128
 _SEARCH_MAX_TERMS = 24
-_SEARCH_BM25_K1 = 1.2
-_SEARCH_BM25_B = 0.75
-_SEARCH_STEM_DISCOUNT = 0.6
-_SEARCH_PREFIX_DISCOUNT = 0.45
-_SEARCH_PREFIX_MIN_LENGTH = 3
-_SEARCH_PREFIX_MAX_LENGTH = 8
-_SEARCH_COVERAGE_WEIGHT = 0.25
-_SEARCH_PROXIMITY_WEIGHT = 0.35
-_SEARCH_PROXIMITY_WINDOW = 8
-# The weight of a question term that names the document of a page.  It is
-# larger than the weight of one term of the text, because a question is about
-# one document and the generic words of a question are repeated by the pages of
-# every document.
-_SEARCH_DOCUMENT_WEIGHT = 8.0
-# The page order is the fusion of three orders: the order that the offline scoring
-# gives the pages, the order that the Memory gives the pages when it searches the
-# whole question, and the best order that the Memory gives a page for one of the
-# terms of the question.  The fusion is a reciprocal rank fusion, so that one
-# order can not push a page that the other orders do not know into the result.
-_SEARCH_RANK_OFFSET = 5
-_SEARCH_OFFLINE_WEIGHT = 1.0
-_SEARCH_FULL_QUESTION_WEIGHT = 0.5
-_SEARCH_ASPECT_WEIGHT = 1.0
-# A question is about one document and it usually names it.  The pages of that
-# document are worth more than the pages of the other documents, whatever the
-# generic words of the question are worth in them.
-_SEARCH_DOCUMENT_WEIGHT = 1.0
-# How much the number of documents a term appears in counts for its weight.
-_SEARCH_DOCUMENT_RARITY_POWER = 2.0
+# A query that matches almost every page of the document can not tell the pages of
+# the document apart, so its order does not count as evidence.
+_SEARCH_INFORMATIVE_SPREAD = 0.5
+_SEARCH_MISSING_RANK = 10**6
+# The order that the Memory gives the pages of a query is the evidence of the
+# query, and the page that a query of the question puts in front is the page that
+# carries the metric of the question.
+_SEARCH_RANK_OFFSET = 5.0
+# A page of the statements of the report carries the numbers of the metrics, and
+# there are only a handful of such pages in a report.
+_SEARCH_STATEMENT_WEIGHT = 0.2
+# The heading of a page names its section.
+_SEARCH_HEADER_TOKENS = 40
+# The weights of the evidence features of one page, in the order of the features
+# that the ranking computes.
 
 # Generic English function words carry no retrieval signal.
-_STOPWORDS = frozenset(
-    """
-    a an the and or but for of to in on at by from with as is are was were be been being am
-    it its it's our ours your yours their theirs this that these those there here
-    what which who whom whose when where why how do does did done
-    have has had having can could shall should will would may might must
-    i me my we us he him his she her they them their
-    not no nor so than then there here also too very just only even still yet
-    into onto upon about above below under over between among through during before after
-    such same other others another any all both each few more most much many own
-    if else because while since until unless whether
-    """.split()
-)
+_STOPWORDS = frozenset([
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "but",
+    "for",
+    "of",
+    "to",
+    "in",
+    "on",
+    "at",
+    "by",
+    "from",
+    "with",
+    "as",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "am",
+    "it",
+    "its",
+    "it's",
+    "our",
+    "ours",
+    "your",
+    "yours",
+    "their",
+    "theirs",
+    "this",
+    "that",
+    "these",
+    "those",
+    "there",
+    "here",
+    "what",
+    "which",
+    "who",
+    "whom",
+    "whose",
+    "when",
+    "where",
+    "why",
+    "how",
+    "do",
+    "does",
+    "did",
+    "done",
+    "have",
+    "has",
+    "had",
+    "having",
+    "can",
+    "could",
+    "shall",
+    "should",
+    "will",
+    "would",
+    "may",
+    "might",
+    "must",
+    "i",
+    "me",
+    "my",
+    "we",
+    "us",
+    "he",
+    "him",
+    "his",
+    "she",
+    "her",
+    "they",
+    "them",
+    "their",
+    "not",
+    "no",
+    "nor",
+    "so",
+    "than",
+    "then",
+    "there",
+    "here",
+    "also",
+    "too",
+    "very",
+    "just",
+    "only",
+    "even",
+    "still",
+    "yet",
+    "into",
+    "onto",
+    "upon",
+    "about",
+    "above",
+    "below",
+    "under",
+    "over",
+    "between",
+    "among",
+    "through",
+    "during",
+    "before",
+    "after",
+    "such",
+    "same",
+    "other",
+    "others",
+    "another",
+    "any",
+    "all",
+    "both",
+    "each",
+    "few",
+    "more",
+    "most",
+    "much",
+    "many",
+    "own",
+    "if",
+    "else",
+    "because",
+    "while",
+    "since",
+    "until",
+    "unless",
+    "whether",
+])
 
 # Wording that frames how an answer should be produced rather than what it asks.
-_FRAME_WORDS = frozenset(
-    """
-    answer answers respond responds response responses
-    question questions ask asks asking
-    calculate calculates calculating compute computes computing
-    define defines defining defined definition definitions
-    assume assumes assuming assumption
-    rely relies relying based upon
-    provide provides providing given provide
-    determine determine determines determine
-    identify identifies identifying explain explains explaining
-    describe describes describing discuss discusses discussing
-    include includes including mention mentions mentioning
-    perspective perspectives analyst analysts investor investors
-    details detail shown shows show within inside outside
-    available available supplied context contexts
-    information info data numbers number values value amounts amount
-    source sources document documents report reports filing filings
-    please kindly help note notes
-    round rounds decimal places address addressed
-    give gives given giving line lines item items
-    usd millions quantity directly outlined explicitly
-    exclude excludes excluding excluded
-    """.split()
+_FRAME_WORDS = frozenset([
+    "answer",
+    "answers",
+    "respond",
+    "responds",
+    "response",
+    "responses",
+    "question",
+    "questions",
+    "ask",
+    "asks",
+    "asking",
+    "calculate",
+    "calculates",
+    "calculating",
+    "compute",
+    "computes",
+    "computing",
+    "define",
+    "defines",
+    "defining",
+    "defined",
+    "definition",
+    "definitions",
+    "assume",
+    "assumes",
+    "assuming",
+    "assumption",
+    "rely",
+    "relies",
+    "relying",
+    "based",
+    "upon",
+    "provide",
+    "provides",
+    "providing",
+    "given",
+    "provide",
+    "determine",
+    "determine",
+    "determines",
+    "determine",
+    "identify",
+    "identifies",
+    "identifying",
+    "explain",
+    "explains",
+    "explaining",
+    "describe",
+    "describes",
+    "describing",
+    "discuss",
+    "discusses",
+    "discussing",
+    "include",
+    "includes",
+    "including",
+    "mention",
+    "mentions",
+    "mentioning",
+    "perspective",
+    "perspectives",
+    "analyst",
+    "analysts",
+    "investor",
+    "investors",
+    "details",
+    "detail",
+    "shown",
+    "shows",
+    "show",
+    "within",
+    "inside",
+    "outside",
+    "available",
+    "available",
+    "supplied",
+    "context",
+    "contexts",
+    "information",
+    "info",
+    "data",
+    "numbers",
+    "number",
+    "values",
+    "value",
+    "amounts",
+    "amount",
+    "source",
+    "sources",
+    "document",
+    "documents",
+    "report",
+    "reports",
+    "filing",
+    "filings",
+    "please",
+    "kindly",
+    "help",
+    "note",
+    "notes",
+    "round",
+    "rounds",
+    "decimal",
+    "places",
+    "address",
+    "addressed",
+    "give",
+    "gives",
+    "given",
+    "giving",
+    "line",
+    "lines",
+    "item",
+    "items",
+    "usd",
+    "millions",
+    "quantity",
+    "directly",
+    "outlined",
+    "explicitly",
+    "exclude",
+    "excludes",
+    "excluding",
+    "excluded",
+])
+
+# The generic titles of the statements of a financial report.  A question about a
+# ratio, a margin or a rate is answered by the statements of the report, and the
+# statements carry their title in the heading of the page.
+_STATEMENT_TITLES = tuple(
+    tuple(title.split())
+    for title in (
+        "consolidated balance sheet",
+        "consolidated balance sheets",
+        "consolidated statement of operations",
+        "consolidated statements of operations",
+        "consolidated statement of income",
+        "consolidated statements of income",
+        "consolidated statement of cash flow",
+        "consolidated statements of cash flow",
+        "consolidated statement of comprehensive income",
+        "consolidated statements of comprehensive income",
+        "consolidated statement of stockholders",
+        "consolidated statements of stockholders",
+        "consolidated statement of equity",
+        "consolidated statements of equity",
+    )
 )
 
 _SUFFIX_RULES: tuple[tuple[str, str], ...] = (
@@ -139,6 +370,12 @@ _SUFFIX_RULES: tuple[tuple[str, str], ...] = (
 
 _STEM_PREFIX = 6
 _STEM_MIN_LENGTH = 4
+
+# One captured page becomes one Memory entry, and one entry body may not be
+# longer than 8192 UTF-8 bytes.  A page whose text is longer than the budget
+# of one entry keeps its beginning; the cut prefers a line boundary.
+_MEMORY_ENTRY_TEXT_LIMIT = 8192
+_PAGE_TEXT_CUT_WINDOW = 256
 
 
 class PDFDocumentInput(BaseModel):
@@ -251,23 +488,61 @@ def parse_pdf_document(value: PDFDocumentInput) -> tuple[PDFPageInput, ...]:
         raise ValueError("PDF content must not be empty")  # noqa: TRY003
     digest = hashlib.sha256(content).hexdigest()
     pages = _extract_pages(content)
+    budget = _page_text_budget(document_id)
     return tuple(
         PDFPageInput(
             document_id=document_id,
             document_sha256=digest,
             page_number=number,
-            text=text,
+            text=_fit_page_text(text, budget),
         )
         for number, text in enumerate(pages, start=1)
     )
 
 
+def _page_text_budget(document_id: str) -> int:
+    """Return how many bytes of page text fit into one stored Memory entry.
+
+    A captured page becomes one Memory entry, and one entry body may not be
+    longer than 8192 UTF-8 bytes.  The entry body of a page is the document id
+    and the text of the page, so the text of a page has to leave room for the
+    document id.
+    """
+
+    used = len(document_id.encode("utf-8")) + 1
+    return max(1, _MEMORY_ENTRY_TEXT_LIMIT - used)
+
+
+def _fit_page_text(text: str, budget: int) -> str:
+    """Return the text of one page, cut to the budget of one stored entry.
+
+    A page whose text is longer than the budget keeps its beginning, which is
+    the part that carries the title of the page and the beginning of its
+    content.  The cut happens at a line boundary whenever the page has one
+    close to the budget, so that the last line of the page stays readable.
+    """
+
+    if len(text.encode("utf-8")) <= budget:
+        return text
+    encoded = text.encode("utf-8")[:budget]
+    cut = encoded.decode("utf-8", errors="ignore")
+    boundary = cut.rfind("\n")
+    if boundary > 0 and len(cut) - boundary <= _PAGE_TEXT_CUT_WINDOW:
+        cut = cut[:boundary]
+    return cut.strip()
+
+
 async def search_pdf_pages(memory: Any, question: str, limit: int = 10) -> tuple[MemoryCitation, ...]:
     """Return the pages that best answer one question from an already opened scoped Memory.
 
-    The candidates come from the public Memory search API; the ranking, the morphological
-    matching and the proximity check are offline query processing over the retrieved text.
-    Every returned citation is an exact Memory entry, so a caller can read the page back.
+    The question is searched as a whole, every informative term of the question is
+    searched on its own and every pair of neighbouring terms is searched as a phrase,
+    so that the Memory returns the pages that carry the metric of the question.  The
+    document that the question is about is told apart from the other documents of the
+    scope, and the pages of that document are ordered by how much question evidence
+    they carry.  The ordering, the morphological matching and the proximity check are
+    offline query processing over the retrieved text.  Every returned citation is an
+    exact Memory entry, so a caller can read the page back.
     """
 
     from powercontext.artifacts import MemoryCitation
@@ -278,10 +553,10 @@ async def search_pdf_pages(memory: Any, question: str, limit: int = 10) -> tuple
     terms = _query_terms(question)
     if not terms:
         return ()
-    candidates, ranks, full_ranks = await _harvest_candidates(memory, terms, question, SearchMemoryRequest)
+    candidates, probes = await _harvest_candidates(memory, question, terms, SearchMemoryRequest)
     if not candidates:
         return ()
-    ranked = _rank_candidates(candidates, ranks, terms, full_ranks)
+    ranked = _rank_candidates(candidates, probes, terms)
     return tuple(
         MemoryCitation(
             memory_ref=hit.memory_ref,
@@ -300,247 +575,242 @@ class _Candidate:
     counts: Counter[str] = field(default_factory=Counter)
     stems: Counter[str] = field(default_factory=Counter)
     tokens: tuple[str, ...] = ()
+    positions: dict[str, list[int]] = field(default_factory=dict)
     length: int = 0
+    numbers: int = 0
     document: str = ""
-    header: frozenset[str] = frozenset()
-    prefixes: dict[str, int] = field(default_factory=dict)
+    document_tokens: tuple[str, ...] = ()
+
+
+@dataclass(slots=True)
+class _Probe:
+    """One query of the Memory, the pages it returned and their order."""
+
+    kind: str
+    query: str
+    ranks: dict[str, int] = field(default_factory=dict)
+    order: dict[str, int] = field(default_factory=dict)
+    terms: tuple[str, ...] = ()
+    spread: float = 1.0
 
 
 async def _harvest_candidates(
     memory: Any,
-    terms: tuple[str, ...],
     question: str,
+    terms: tuple[str, ...],
     request_class: Any,
-) -> tuple[dict[str, _Candidate], dict[str, dict[str, int]], dict[str, int]]:
+) -> tuple[dict[str, _Candidate], list[_Probe]]:
     """Collect the pages the scoped Memory returns for one question.
 
-    Each informative term is searched on its own so that the shared lexical admission
-    floor stays satisfiable, and every retrieved page keeps the rank it reached for
-    the terms that matched it.  The whole question is searched as well: that search
-    ranks the pages with the statistics of the whole corpus, which the offline
-    scoring over the harvested candidates can not reproduce.
+    The whole question is searched, every informative term of the question is
+    searched on its own, and every pair of neighbouring terms is searched as a
+    phrase.  A search of two terms admits every page that carries one of them
+    and orders the pages that carry both of them first, so the phrases find the
+    pages that carry the metric of the question.
     """
 
     candidates: dict[str, _Candidate] = {}
-    ranks: dict[str, dict[str, int]] = {}
-    full_ranks: dict[str, int] = {}
-    for query in (question, *terms):
-        request = request_class(query=query, limit=_SEARCH_HARVEST_LIMIT, mode="fts")
+    probes: list[_Probe] = []
+    for kind, query in _probe_queries(question, terms):
+        request = request_class(query=query, limit=_SEARCH_PROBE_LIMIT, mode="fts")
         page = await memory.search(request)
         hits = getattr(page, "hits", ())
-        if not hits:
-            continue
-        query_ranks = full_ranks if query == question else ranks.setdefault(query, {})
+        probe = _Probe(kind=kind, query=query)
         for rank, hit in enumerate(hits, start=1):
-            entry_id = hit.entry_id
-            query_ranks[entry_id] = rank
-            candidate = candidates.get(entry_id)
+            probe.ranks[hit.entry_id] = rank
+            candidate = candidates.get(hit.entry_id)
             if candidate is None:
                 candidate = _Candidate(hit=hit)
-                candidates[entry_id] = candidate
+                candidates[hit.entry_id] = candidate
             candidate.hit = hit
-            _index_tokens(candidate, hit.text)
-    return candidates, ranks, full_ranks
+            _index_candidate(candidate, hit.text)
+        probes.append(probe)
+    return candidates, probes
 
 
-def _index_tokens(candidate: _Candidate, text: str) -> None:
-    """Record the token and stem material of one retrieved page."""
+def _probe_queries(question: str, terms: tuple[str, ...]) -> list[tuple[str, str]]:
+    """Return the queries that the Memory is asked for one question."""
+
+    queries: list[tuple[str, str]] = [("question", question)]
+    queries.extend(("term", term) for term in terms)
+    queries.extend(("bigram", f"{left} {right}") for left, right in pairwise(terms))
+    return queries
+
+
+def _index_candidate(candidate: _Candidate, text: str) -> None:
+    """Record the lexical material of one retrieved page."""
 
     tokens = tuple(_TOKEN.findall(text.casefold()))
     candidate.tokens = tokens
     candidate.length = len(tokens)
     candidate.counts = Counter(tokens)
     candidate.stems = Counter(_stem(token) for token in tokens)
+    positions: dict[str, list[int]] = {}
+    for index, token in enumerate(tokens):
+        positions.setdefault(token, []).append(index)
+    candidate.positions = positions
+    candidate.numbers = len(_NUMBER.findall(text))
     header, _, _ = text.partition("\n")
     candidate.document = header.strip()
-    candidate.header = frozenset(_TOKEN.findall(candidate.document.casefold()))
-    # the number of occurrences of every stem that shares a prefix with the
-    # stem of a question term is looked up by the first characters of the stem
-    prefixes: dict[str, int] = {}
-    for stem, count in candidate.stems.items():
-        for size in range(_SEARCH_PREFIX_MIN_LENGTH, min(len(stem), _SEARCH_PREFIX_MAX_LENGTH) + 1):
-            key = stem[:size]
-            if count > prefixes.get(key, 0):
-                prefixes[key] = count
-    candidate.prefixes = prefixes
+    candidate.document_tokens = tuple(_TOKEN.findall(candidate.document.casefold()))
 
 
 def _rank_candidates(
     candidates: dict[str, _Candidate],
-    ranks: dict[str, dict[str, int]],
+    probes: list[_Probe],
     terms: tuple[str, ...],
-    full_ranks: dict[str, int],
 ) -> list[Any]:
-    """Order the retrieved pages by how much question evidence they carry."""
+    """Order the retrieved pages by how much question evidence they carry.
 
-    corpus = max(1, len(candidates))
-    document_frequency: Counter[str] = Counter()
-    for candidate in candidates.values():
-        document_frequency.update(candidate.stems.keys())
-    weights = {term: _inverse_frequency(document_frequency.get(_stem(term), 0), corpus) for term in terms}
-    average_length = max(1.0, sum(candidate.length for candidate in candidates.values()) / corpus)
-    scored: list[tuple[float, str, Any]] = []
-    for entry_id, candidate in candidates.items():
-        matched = _matched_terms(candidate, terms)
-        if not matched:
-            continue
-        score = 0.0
-        for term in matched:
-            weight = weights.get(term, 0.0)
-            if weight <= 0.0:
-                continue
-            count, discount = _term_count(candidate, term)
-            if count <= 0:
-                continue
-            score += weight * discount * _saturation(count, candidate.length, average_length)
-        score += _SEARCH_COVERAGE_WEIGHT * len(matched)
-        score += _SEARCH_PROXIMITY_WEIGHT * _proximity(candidate, matched, weights)
-        scored.append((score, entry_id, candidate.hit))
-    scored.sort(key=lambda item: (-item[0], item[1]))
-    return _fuse_ranks(
-        [hit for _score, _entry_id, hit in scored], ranks, full_ranks, candidates, terms
-    )
-
-
-def _ranks_inside_documents(
-    candidates: dict[str, _Candidate], ranks: dict[str, dict[str, int]]
-) -> dict[str, int]:
-    """Return the best order a page has inside its own document, over all terms.
-
-    The order of a page for one term is only meaningful inside the document of
-    the question: the leader of a term in another document is not the leader
-    that answers this question.
+    A question is about one document, and the question usually names it, so the
+    pages of the other documents are not candidates for the answer.  Inside the
+    document of the question the pages are ordered by the orders that the Memory
+    gave them: the page that a query of the question puts in front carries the
+    metric of the question, and the pages of the statements of the report carry
+    the numbers of the metrics.
     """
 
-    result: dict[str, int] = {}
-    for term_ranks in ranks.values():
-        by_document: dict[str, list[tuple[int, str]]] = {}
-        for entry_id, rank in term_ranks.items():
+    target = _target_document(candidates, probes, terms)
+    pages = {
+        entry_id: candidate
+        for entry_id, candidate in candidates.items()
+        if target is None or candidate.document == target
+    } or candidates
+    corpus = len(pages)
+    frequency: Counter[str] = Counter()
+    for candidate in pages.values():
+        for term in terms:
+            if _term_count(candidate, term):
+                frequency[term] += 1
+    for probe in probes:
+        inside = sorted((rank, entry_id) for entry_id, rank in probe.ranks.items() if entry_id in pages)
+        probe.order = {entry_id: position for position, (_rank, entry_id) in enumerate(inside, start=1)}
+        probe.terms = _probe_terms(probe, terms)
+        probe.spread = max((frequency.get(term, 0) for term in probe.terms), default=0) / corpus if corpus else 1.0
+    scored: list[tuple[float, int, str, Any]] = []
+    for entry_id, candidate in pages.items():
+        best = _SEARCH_MISSING_RANK
+        best_informative = _SEARCH_MISSING_RANK
+        for probe in probes:
+            rank = probe.order.get(entry_id)
+            if rank is None:
+                continue
+            if rank < best:
+                best = rank
+            if probe.spread <= _SEARCH_INFORMATIVE_SPREAD and rank < best_informative:
+                best_informative = rank
+        score = 1.0 / (_SEARCH_RANK_OFFSET + best_informative)
+        score += _SEARCH_STATEMENT_WEIGHT * float(_is_statement_page(candidate.tokens))
+        scored.append((score, best, entry_id, candidate.hit))
+    scored.sort(key=lambda item: (-item[0], item[1], item[2]))
+    return [hit for _score, _best, _entry_id, hit in scored]
+
+
+def _target_document(
+    candidates: dict[str, _Candidate],
+    probes: list[_Probe],
+    terms: tuple[str, ...],
+) -> str | None:
+    """Return the document that the question is about.
+
+    A question names its document in most cases, and the name of the document is
+    written in front of the text of every one of its pages.  When no term of the
+    question names a document, the order of the whole question decides: the
+    document whose pages the Memory returns first is the document of the question.
+    """
+
+    matches: dict[str, int] = {}
+    for candidate in candidates.values():
+        document = candidate.document
+        matched = _document_match(candidate, terms)
+        if matched > matches.get(document, 0):
+            matches[document] = matched
+    if matches:
+        best = max(matches.items(), key=lambda item: (item[1], item[0]))
+        if best[1] > 0:
+            return best[0]
+    weights: dict[str, float] = {}
+    for probe in probes:
+        if probe.kind != "question":
+            continue
+        for entry_id, rank in probe.ranks.items():
             candidate = candidates.get(entry_id)
             if candidate is None:
                 continue
-            by_document.setdefault(candidate.document, []).append((rank, entry_id))
-        for entries in by_document.values():
-            entries.sort()
-            for position, (_rank, entry_id) in enumerate(entries, start=1):
-                if entry_id not in result or position < result[entry_id]:
-                    result[entry_id] = position
-    return result
-
-
-def _fuse_ranks(
-    ordered: list[Any],
-    ranks: dict[str, dict[str, int]],
-    full_ranks: dict[str, int],
-    candidates: dict[str, _Candidate],
-    terms: tuple[str, ...],
-) -> list[Any]:
-    """Balance the offline order with the orders that the Memory gives the pages.
-
-    The Memory searches the whole question with the statistics of the whole corpus,
-    which is what tells the pages of the document that the question is about apart
-    from the pages of the other documents.  The offline order adds the coverage of
-    the question terms and their proximity.  The best order of a page for a single
-    term keeps a page that answers one aspect of a multi part question in the
-    result.  A page of the document that the question names is worth more than a
-    page of another document, however well the other document repeats the generic
-    words of the question.
-    """
-
-    best_ranks: dict[str, int] = {}
-    for query_ranks in ranks.values():
-        for entry_id, rank in query_ranks.items():
-            if entry_id in best_ranks:
-                best_ranks[entry_id] = min(best_ranks[entry_id], rank)
-            else:
-                best_ranks[entry_id] = rank
-    # The order of a page for one term is only meaningful inside the document
-    # of the question: the leader of a term in another document is not the
-    # leader that answers this question.
-    document_ranks = _ranks_inside_documents(candidates, ranks)
-    for entry_id, rank in document_ranks.items():
-        if entry_id in best_ranks:
-            best_ranks[entry_id] = min(best_ranks[entry_id], rank)
-        else:
-            best_ranks[entry_id] = rank
-    fused: list[tuple[float, int, Any]] = []
-    for rank, hit in enumerate(ordered, start=1):
-        score = _SEARCH_OFFLINE_WEIGHT / (_SEARCH_RANK_OFFSET + rank)
-        aspect_rank = best_ranks.get(hit.entry_id)
-        if aspect_rank is not None:
-            score += _SEARCH_ASPECT_WEIGHT / (_SEARCH_RANK_OFFSET + aspect_rank)
-        full_rank = full_ranks.get(hit.entry_id)
-        if full_rank is not None:
-            score += _SEARCH_FULL_QUESTION_WEIGHT / (_SEARCH_RANK_OFFSET + full_rank)
-        candidate = candidates.get(hit.entry_id)
-        if candidate is not None and _document_match(candidate, terms):
-            score += _SEARCH_DOCUMENT_WEIGHT
-        fused.append((score, rank, hit))
-    fused.sort(key=lambda item: (-item[0], item[1]))
-    return [hit for _score, _rank, hit in fused]
+            weights[candidate.document] = weights.get(candidate.document, 0.0) + 1.0 / (60.0 + rank)
+    if weights:
+        return max(weights.items(), key=lambda item: (item[1], item[0]))[0]
+    return None
 
 
 def _document_match(candidate: _Candidate, terms: tuple[str, ...]) -> int:
     """Return how many question terms name the document of one page.
 
-    A question is about one document, and the question usually names it.  The
-    document is written in front of the text of every page, so a page whose
-    document carries one of the question terms is a page of the document that
-    the question asks about.  Without this signal the pages of the other
-    documents win whenever they repeat the generic words of the question, for
-    example "income", "cash" or "statement".
+    A question is about one document and it usually names it.  The name of the
+    document is written in front of the text of every one of its pages, so a page
+    whose document carries one of the question terms belongs to the document that
+    the question asks about.  Without this signal the pages of the other documents
+    win whenever they repeat the generic words of the question.
     """
 
-    if not candidate.header:
-        return 0
+    tokens = candidate.document_tokens
+    stems = {_stem(token) for token in tokens}
     matched = 0
     for term in terms:
-        if term in candidate.header or _stem(term) in candidate.header:
-            matched += 1
+        for form in _term_forms(term):
+            if form in tokens or _stem(form) in stems:
+                matched += 1
+                break
+            if any(form in token for token in tokens if len(token) >= 4):
+                matched += 1
+                break
     return matched
 
 
-def _matched_terms(candidate: _Candidate, terms: tuple[str, ...]) -> list[str]:
-    """Return the question terms one page carries, exactly or by morphology."""
+def _probe_terms(probe: _Probe, terms: tuple[str, ...]) -> tuple[str, ...]:
+    """Return the question terms that one query of the Memory carries."""
 
-    matched: list[str] = []
+    query_tokens = set(_TOKEN.findall(probe.query.casefold()))
+    carried: list[str] = []
     for term in terms:
-        count, _discount = _term_count(candidate, term)
-        if count:
-            matched.append(term)
-    return matched
+        for form in _term_forms(term):
+            if form in query_tokens:
+                carried.append(term)
+                break
+    return tuple(carried)
 
 
-def _term_count(candidate: _Candidate, term: str) -> tuple[int, float]:
-    """Return how often a question term occurs in one page and what that counts.
+def _is_statement_page(tokens: tuple[str, ...]) -> bool:
+    """Return whether one page carries the title of a statement of the report.
 
-    An exact token counts fully, a token with the same stem counts with the stem
-    discount and a token that only shares a prefix with the stem of the term
-    counts with the smaller prefix discount.  The suffix rules of the stemmer do
-    not catch every morphological pair: "tax" and "taxes", "geography" and
-    "geographic" or "margin" and "marginal" are one word for a reader and two
-    tokens for a matcher.
+    A question about a ratio, a margin or a rate is answered by the statements
+    of the report, and the statements carry their title in the heading of the
+    page.  The titles are the generic titles of the statements of a financial
+    report; a report that uses other titles simply has no such page.
     """
+
+    header = tokens[:_SEARCH_HEADER_TOKENS]
+    for title in _STATEMENT_TITLES:
+        size = len(title)
+        for index in range(0, max(0, len(header) - size) + 1):
+            if header[index : index + size] == title:
+                return True
+    return False
+
+
+def _term_count(candidate: _Candidate, term: str) -> int:
+    """Return how often one question term occurs in one page."""
 
     forms = _term_forms(term)
     for form in forms:
         exact = candidate.counts.get(form, 0)
         if exact:
-            return exact, 1.0
+            return exact
     for form in forms:
         stemmed = candidate.stems.get(_stem(form), 0)
         if stemmed:
-            return stemmed, _SEARCH_STEM_DISCOUNT
-    term_stems = [_stem(form) for form in forms]
-    loose = 0
-    for term_stem in term_stems:
-        for size in range(_SEARCH_PREFIX_MIN_LENGTH, min(len(term_stem), _SEARCH_PREFIX_MAX_LENGTH) + 1):
-            count = candidate.prefixes.get(term_stem[:size], 0)
-            if count > loose:
-                loose = count
-    if loose:
-        return loose, _SEARCH_PREFIX_DISCOUNT
-    return 0, 0.0
+            return stemmed
+    return 0
 
 
 def _term_forms(term: str) -> tuple[str, ...]:
@@ -558,59 +828,7 @@ def _term_forms(term: str) -> tuple[str, ...]:
     return tuple(forms)
 
 
-def _documents_per_term(
-    candidates: dict[str, _Candidate], terms: tuple[str, ...]
-) -> Counter[str]:
-    """Return how many documents every question term appears in."""
-
-    counts: Counter[str] = Counter()
-    for term in terms:
-        documents = set()
-        for candidate in candidates.values():
-            count, _discount = _term_count(candidate, term)
-            if count:
-                documents.add(candidate.document)
-        counts[term] = len(documents)
-    return counts
-
-
-def _inverse_frequency(document_frequency: int, corpus: int) -> float:
-    """Return how much one term narrows the corpus."""
-
-    if document_frequency <= 0:
-        return 0.0
-    return math.log(1.0 + corpus / document_frequency)
-
-
-def _saturation(term_frequency: int, length: int, average_length: float) -> float:
-    """Return the saturated frequency contribution of one term in one page."""
-
-    if term_frequency <= 0:
-        return 0.0
-    normalization = 1.0 - _SEARCH_BM25_B + _SEARCH_BM25_B * (length / average_length)
-    return term_frequency * (_SEARCH_BM25_K1 + 1.0) / (term_frequency + _SEARCH_BM25_K1 * normalization)
-
-
-def _proximity(candidate: _Candidate, matched: list[str], weights: dict[str, float]) -> float:
-    """Return how tightly the matched question terms sit together in one page."""
-
-    if len(matched) < 2:
-        return 0.0
-    positions: dict[str, list[int]] = {}
-    for index, token in enumerate(candidate.tokens):
-        for term in matched:
-            if token == term or _stem(token) == _stem(term):
-                positions.setdefault(term, []).append(index)
-    total = 0.0
-    for left_index, left in enumerate(matched):
-        for right in matched[left_index + 1 :]:
-            if not _within_window(positions.get(left, ()), positions.get(right, ())):
-                continue
-            total += min(weights.get(left, 0.0), weights.get(right, 0.0))
-    return total
-
-
-def _within_window(left: list[int], right: list[int], window: int = _SEARCH_PROXIMITY_WINDOW) -> bool:
+def _within_window(left: list[int], right: list[int], window: int) -> bool:
     """Return whether two term occurrences sit within the proximity window."""
 
     if not left or not right:
