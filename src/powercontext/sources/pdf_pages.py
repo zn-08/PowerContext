@@ -687,23 +687,40 @@ def _rank_candidates(
         probe.order = {entry_id: position for position, (_rank, entry_id) in enumerate(inside, start=1)}
         probe.terms = _probe_terms(probe, terms)
         probe.spread = max((frequency.get(term, 0) for term in probe.terms), default=0) / corpus if corpus else 1.0
-    scored: list[tuple[float, int, str, Any]] = []
+    scored: list[tuple[float, int, int, str, Any]] = []
     for entry_id, candidate in pages.items():
-        best = _SEARCH_MISSING_RANK
-        best_informative = _SEARCH_MISSING_RANK
-        for probe in probes:
-            rank = probe.order.get(entry_id)
-            if rank is None:
-                continue
-            if rank < best:
-                best = rank
-            if probe.spread <= _SEARCH_INFORMATIVE_SPREAD and rank < best_informative:
-                best_informative = rank
+        best, best_informative, question_rank = _page_orders(probes, entry_id)
         score = 1.0 / (_SEARCH_RANK_OFFSET + best_informative)
         score += _SEARCH_STATEMENT_WEIGHT * float(_is_statement_page(candidate.tokens))
-        scored.append((score, best, entry_id, candidate.hit))
-    scored.sort(key=lambda item: (-item[0], item[1], item[2]))
-    return [hit for _score, _best, _entry_id, hit in scored]
+        scored.append((score, question_rank, best, entry_id, candidate.hit))
+    # The pages that no query of the question put in front are ordered by the order
+    # of the whole question: that order is the order of the Memory itself.
+    scored.sort(key=lambda item: (-item[0], item[1], item[2], item[3]))
+    return [hit for _score, _question, _best, _entry_id, hit in scored]
+
+
+def _page_orders(probes: list[_Probe], entry_id: str) -> tuple[int, int, int]:
+    """Return the orders that the Memory gave one page.
+
+    The first order is the best order of the page over all the queries, the
+    second one the best order over the queries that can tell the pages of the
+    document apart, and the third one the order of the whole question.
+    """
+
+    best = _SEARCH_MISSING_RANK
+    best_informative = _SEARCH_MISSING_RANK
+    question_rank = _SEARCH_MISSING_RANK
+    for probe in probes:
+        rank = probe.order.get(entry_id)
+        if rank is None:
+            continue
+        if rank < best:
+            best = rank
+        if probe.kind == "question" and rank < question_rank:
+            question_rank = rank
+        if probe.spread <= _SEARCH_INFORMATIVE_SPREAD and rank < best_informative:
+            best_informative = rank
+    return best, best_informative, question_rank
 
 
 def _target_document(
