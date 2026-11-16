@@ -49,6 +49,10 @@ _MAX_PAGE_NUMBER_DIGITS = 20
 
 _TOKEN = re.compile(r"[0-9a-z]+")
 _NUMBER = re.compile(r"[0-9][0-9.,]*")
+# The name of a company as a report writes it, as in "American Express".
+_COMPANY_NAME = re.compile(r"\b[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){1,3}\b")
+# The head of a page carries the name of the company.
+_COMPANY_NAME_SCAN = 4000
 
 # Retrieval tuning.  The values are deliberately generic: they rank one page against
 # another for one question and never encode a document, a page or an answer.
@@ -598,6 +602,7 @@ class _Candidate:
     document: str = ""
     document_tokens: tuple[str, ...] = ()
     document_parts: tuple[str, ...] = ()
+    document_words: tuple[str, ...] = ()
     body_counts: Counter[str] = field(default_factory=Counter)
     body_stems: Counter[str] = field(default_factory=Counter)
 
@@ -714,6 +719,7 @@ def _index_candidate(candidate: _Candidate, text: str) -> None:
     candidate.document = header.strip()
     candidate.document_tokens = tuple(_TOKEN.findall(candidate.document.casefold()))
     candidate.document_parts = _document_parts(candidate.document)
+    candidate.document_words = _document_words(body)
     tokens = tuple(_TOKEN.findall(text.casefold()))
     candidate.tokens = tokens
     candidate.length = len(tokens)
@@ -827,15 +833,18 @@ def _target_document(
     """
 
     matches: dict[str, int] = {}
+    details: dict[str, int] = {}
     for candidate in candidates.values():
         document = candidate.document
         matched = _document_match(candidate, terms)
         if matched > matches.get(document, 0):
             matches[document] = matched
-    if matches:
-        best = _best_document(matches)
-        if best is not None:
-            return best
+        detail = _document_detail_match(candidate, terms)
+        if detail > details.get(document, 0):
+            details[document] = detail
+    named = _named_document(matches, details)
+    if named is not None:
+        return named
     weights: dict[str, float] = {}
     for probe in probes:
         if probe.kind != "question":
@@ -845,19 +854,17 @@ def _target_document(
             if candidate is None:
                 continue
             weights[candidate.document] = weights.get(candidate.document, 0.0) + 1.0 / (60.0 + rank)
-    if weights:
-        return _best_document(weights)
-    return None
+    return _best_document_by_order(weights)
 
 
-def _best_document(matches: dict[str, int]) -> str | None:
-    """Return the document that the terms of the question name best.
+def _named_document(matches: dict[str, int], details: dict[str, int]) -> str | None:
+    """Return the document that the terms of the question name.
 
     The terms of a question name one document of the scope, and a term that
     every document of the scope carries names none of them.  A document is
     therefore only returned when it carries more named terms than every other
-    document of the scope.  Otherwise the question names no document, and the
-    order of the whole question decides.
+    document of the scope.  Documents that carry the same name are told apart
+    by the year and the kind of the report that the question names as well.
     """
 
     if not matches:
@@ -866,9 +873,32 @@ def _best_document(matches: dict[str, int]) -> str | None:
     if best <= 0:
         return None
     leaders = sorted(document for document, count in matches.items() if count == best)
-    if len(leaders) > 1:
+    if len(leaders) == 1:
+        return leaders[0]
+    return max(leaders, key=lambda document: (details.get(document, 0), document))
+
+
+def _best_document_by_order(weights: dict[str, float]) -> str | None:
+    """Return the document that the order of the whole question favours.
+
+    The order of the question tells the pages of the scope apart, but a
+    question that names no document is told apart only by the words that every
+    document of the scope carries.  A document is therefore only returned when
+    the order favours it clearly over every other document of the scope.
+    """
+
+    if not weights:
         return None
-    return leaders[0]
+    ordered = sorted(weights.items(), key=lambda item: (-item[1], item[0]))
+    best_document, best = ordered[0]
+    if len(ordered) == 1:
+        return best_document
+    if best <= 0:
+        return None
+    second = ordered[1][1]
+    if best < second * 2.0:
+        return None
+    return best_document
 
 
 def _document_match(candidate: _Candidate, terms: tuple[str, ...]) -> int:
@@ -891,10 +921,30 @@ def _document_match(candidate: _Candidate, terms: tuple[str, ...]) -> int:
     stems = {_stem(token) for token in tokens}
     name = _document_name(tokens)
     parts = candidate.document_parts
+    words = candidate.document_words
     matched = 0
     for term in terms:
-        if _term_names_document(term, tokens, stems, name, parts):
+        if _term_names_document(term, tokens, stems, name, parts, words):
             matched += 1
+    return matched
+
+
+def _document_detail_match(candidate: _Candidate, terms: tuple[str, ...]) -> int:
+    """Return how many question terms name the year or the kind of a document.
+
+    Two documents of a scope can carry the same name, as in the reports of a
+    company of two different years, and the question then names the year of the
+    report as well.  The year and the kind of a document tell the documents of
+    the same name apart.
+    """
+
+    tokens = candidate.document_tokens
+    matched = 0
+    for term in terms:
+        for form in _term_forms(term):
+            if form in tokens:
+                matched += 1
+                break
     return matched
 
 def _document_name(tokens: tuple[str, ...]) -> str:
@@ -927,6 +977,23 @@ def _document_parts(document: str) -> tuple[str, ...]:
             continue
         parts.extend(_split_name_word(piece))
     return tuple(parts)
+
+
+def _document_words(body: str) -> tuple[str, ...]:
+    """Return the name that the report writes for itself in its own text.
+
+    A report writes the name of the company in words, as in "American Express",
+    so the short form of the name of a document can be told from the words of
+    the report itself.
+    """
+
+    names: Counter[str] = Counter()
+    for match in _COMPANY_NAME.finditer(body[:_COMPANY_NAME_SCAN]):
+        names[match.group(0)] += 1
+    if not names:
+        return ()
+    name = names.most_common(1)[0][0]
+    return tuple(name.split())
 
 
 def _split_name_word(token: str) -> list[str]:
@@ -975,6 +1042,7 @@ def _term_names_document(
     stems: set[str],
     name: str,
     parts: tuple[str, ...] = (),
+    words: tuple[str, ...] = (),
 ) -> bool:
     """Return whether one word of the question names one document.
 
@@ -992,18 +1060,45 @@ def _term_names_document(
             return True
         if any(form in token for token in name_tokens if len(token) >= 4):
             return True
-    # The short form of a name names the document of that name.
-    if len(term) >= 3 and term.isalpha():
-        letters = "".join(character for character in term if character.isalpha())
-        if letters != name and len(letters) >= 3 and name.startswith(letters):
-            return True
-        if (
-            len(parts) >= 2
-            and len(letters) == len(parts)
-            and all(letter == part[0].casefold() for letter, part in zip(letters, parts, strict=True))
-        ):
-            return True
-    return False
+    return _short_form_names_document(term, name, parts, words)
+
+
+def _short_form_names_document(
+    term: str,
+    name: str,
+    parts: tuple[str, ...],
+    words: tuple[str, ...],
+) -> bool:
+    """Return whether one word of the question is the short form of a name.
+
+    A report is named in its short form as well, as in "AMEX" for "American
+    Express", and the short form of a name names the document of that name.
+    """
+
+    if len(term) < 3 or not term.isalpha():
+        return False
+    letters = "".join(character for character in term if character.isalpha())
+    if letters != name and len(letters) >= 3 and name.startswith(letters):
+        return True
+    acronyms = _document_acronyms(parts) + _document_acronyms(words)
+    return any(letters == acronym for acronym in acronyms)
+
+
+def _document_acronyms(parts: tuple[str, ...]) -> tuple[str, ...]:
+    """Return the short forms of the name of a document.
+
+    A report is named in its short form as well, and the short form is the
+    initials of the words of the name, as in "AMEX" for "American Express".  A
+    word of the question that is such a short form names that document.
+    """
+
+    if len(parts) < 2:
+        return ()
+    initials = "".join(part[0].casefold() for part in parts)
+    forms = [initials]
+    if len(parts) == 2:
+        forms.append(initials + parts[1].casefold())
+    return tuple(form for form in forms if len(form) >= 3)
 
 
 def _probe_terms(probe: _Probe, terms: tuple[str, ...]) -> tuple[str, ...]:
