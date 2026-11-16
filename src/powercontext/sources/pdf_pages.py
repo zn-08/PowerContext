@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
@@ -61,11 +62,27 @@ _SEARCH_MISSING_RANK = 10**6
 # query, and the page that a query of the question puts in front is the page that
 # carries the metric of the question.
 _SEARCH_RANK_OFFSET = 5.0
-# A page of the statements of the report carries the numbers of the metrics, and
-# there are only a handful of such pages in a report.
-_SEARCH_STATEMENT_WEIGHT = 0.2
+# The weight of the order of one query.  The order of a query that matches almost
+# every page of the document tells the pages hardly apart, so the order counts
+# less than the order of a query that matches few pages.
+_SEARCH_PROBE_WEIGHT = 0.5
+# The weight of the words of the question that a page carries, of the heading of
+# the page and of the page being a page of the statements of the report.
+_SEARCH_COVERAGE_WEIGHT = 0.02
+_SEARCH_HEADING_WEIGHT = 0.05
+_SEARCH_STATEMENT_WEIGHT = 0.3
 # The heading of a page names its section.
 _SEARCH_HEADER_TOKENS = 40
+# The pages of the statements of the report carry the numbers of the metrics.
+# Their titles are searched as well, so that a question about a metric reaches
+# the statement that carries the numbers of the metric.
+_SEARCH_STATEMENT_PROBES = (
+    "balance sheet",
+    "statements operations",
+    "statements income",
+    "statements cash",
+    "stockholders equity",
+)
 # The weights of the evidence features of one page, in the order of the features
 # that the ranking computes.
 
@@ -580,6 +597,9 @@ class _Candidate:
     numbers: int = 0
     document: str = ""
     document_tokens: tuple[str, ...] = ()
+    document_parts: tuple[str, ...] = ()
+    body_counts: Counter[str] = field(default_factory=Counter)
+    body_stems: Counter[str] = field(default_factory=Counter)
 
 
 @dataclass(slots=True)
@@ -591,7 +611,7 @@ class _Probe:
     ranks: dict[str, int] = field(default_factory=dict)
     order: dict[str, int] = field(default_factory=dict)
     terms: tuple[str, ...] = ()
-    spread: float = 1.0
+    rarity: float = 0.0
 
 
 async def _harvest_candidates(
@@ -629,17 +649,71 @@ async def _harvest_candidates(
 
 
 def _probe_queries(question: str, terms: tuple[str, ...]) -> list[tuple[str, str]]:
-    """Return the queries that the Memory is asked for one question."""
+    """Return the queries that the Memory is asked for one question.
+
+    The search of the Memory does not reduce a word to its stem, so a question
+    about "service" does not find a page that writes "Global Services" and a
+    question about "revenue" does not find a page that writes "Revenues".  Every
+    term is therefore searched twice: once as the question writes it and once
+    with the other form of the word, which finds the pages that use the other
+    form.
+    """
 
     queries: list[tuple[str, str]] = [("question", question)]
     queries.extend(("term", term) for term in terms)
+    queries.extend(("term", f"{term} {variant}") for term, variant in _term_variants(terms))
     queries.extend(("bigram", f"{left} {right}") for left, right in pairwise(terms))
+    queries.extend(("statement", probe) for probe in _SEARCH_STATEMENT_PROBES)
     return queries
 
 
-def _index_candidate(candidate: _Candidate, text: str) -> None:
-    """Record the lexical material of one retrieved page."""
+def _term_variants(terms: tuple[str, ...]) -> list[tuple[str, str]]:
+    """Return the other form of every term of the question.
 
+    English writes a word in one form and uses the other one in the report:
+    "category" and "categories", "service" and "services".  The other form of a
+    word is searched with it, so that the pages that use the other form are
+    found as well.
+    """
+
+    variants: list[tuple[str, str]] = []
+    for term in terms:
+        other = _other_form(term)
+        if other:
+            variants.append((term, other))
+    return variants
+
+
+def _other_form(term: str) -> str:
+    """Return the other inflection of one word, or an empty string."""
+
+    if len(term) < 3 or not term.isalpha():
+        return ""
+    if term.endswith("ies"):
+        return term[:-3] + "y"
+    if term.endswith("ss"):
+        return ""
+    if term.endswith("s"):
+        return term[:-1]
+    if term.endswith("y"):
+        return term[:-1] + "ies"
+    return term + "s"
+
+
+def _index_candidate(candidate: _Candidate, text: str) -> None:
+    """Record the lexical material of one retrieved page.
+
+    The Memory writes the document id in front of the text of every page of the
+    document, so the words of the document id are on every one of its pages.
+    The words of the document id therefore tell the pages of the document
+    apart not at all, and the rarity of a query of the document is measured
+    over the body of the pages alone.
+    """
+
+    header, _, body = text.partition("\n")
+    candidate.document = header.strip()
+    candidate.document_tokens = tuple(_TOKEN.findall(candidate.document.casefold()))
+    candidate.document_parts = _document_parts(candidate.document)
     tokens = tuple(_TOKEN.findall(text.casefold()))
     candidate.tokens = tokens
     candidate.length = len(tokens)
@@ -650,9 +724,9 @@ def _index_candidate(candidate: _Candidate, text: str) -> None:
         positions.setdefault(token, []).append(index)
     candidate.positions = positions
     candidate.numbers = len(_NUMBER.findall(text))
-    header, _, _ = text.partition("\n")
-    candidate.document = header.strip()
-    candidate.document_tokens = tuple(_TOKEN.findall(candidate.document.casefold()))
+    body_tokens = tuple(_TOKEN.findall(body.casefold()))
+    candidate.body_counts = Counter(body_tokens)
+    candidate.body_stems = Counter(_stem(token) for token in body_tokens)
 
 
 def _rank_candidates(
@@ -665,9 +739,10 @@ def _rank_candidates(
     A question is about one document, and the question usually names it, so the
     pages of the other documents are not candidates for the answer.  Inside the
     document of the question the pages are ordered by the orders that the Memory
-    gave them: the page that a query of the question puts in front carries the
-    metric of the question, and the pages of the statements of the report carry
-    the numbers of the metrics.
+    gave them: every query of the question is evidence, and a query that matches
+    few pages of the document says more about a page than a query that matches
+    almost every page of it.  The words of the question that a page carries, the
+    heading of the page and the statements of the report are evidence as well.
     """
 
     target = _target_document(candidates, probes, terms)
@@ -682,45 +757,60 @@ def _rank_candidates(
         for term in terms:
             if _term_count(candidate, term):
                 frequency[term] += 1
+    weights = {term: _local_inverse_frequency(frequency.get(term, 0), corpus) for term in terms if frequency.get(term)}
     for probe in probes:
         inside = sorted((rank, entry_id) for entry_id, rank in probe.ranks.items() if entry_id in pages)
         probe.order = {entry_id: position for position, (_rank, entry_id) in enumerate(inside, start=1)}
         probe.terms = _probe_terms(probe, terms)
-        probe.spread = max((frequency.get(term, 0) for term in probe.terms), default=0) / corpus if corpus else 1.0
-    scored: list[tuple[float, int, int, str, Any]] = []
-    for entry_id, candidate in pages.items():
-        best, best_informative, question_rank = _page_orders(probes, entry_id)
-        score = 1.0 / (_SEARCH_RANK_OFFSET + best_informative)
+        probe.rarity = _probe_rarity(probe, pages, corpus)
+    scored: list[tuple[float, int, Any]] = []
+    for position, (entry_id, candidate) in enumerate(pages.items()):
+        score = 0.0
+        for probe in probes:
+            if probe.kind == "statement":
+                continue
+            rank = probe.order.get(entry_id)
+            if rank is None:
+                continue
+            score += _SEARCH_PROBE_WEIGHT * probe.rarity / (_SEARCH_RANK_OFFSET + rank)
+        score += _SEARCH_COVERAGE_WEIGHT * _coverage(candidate, terms, weights)
+        score += _SEARCH_HEADING_WEIGHT * _heading_overlap(candidate, terms, weights)
         score += _SEARCH_STATEMENT_WEIGHT * float(_is_statement_page(candidate.tokens))
-        scored.append((score, question_rank, best, entry_id, candidate.hit))
-    # The pages that no query of the question put in front are ordered by the order
-    # of the whole question: that order is the order of the Memory itself.
-    scored.sort(key=lambda item: (-item[0], item[1], item[2], item[3]))
-    return [hit for _score, _question, _best, _entry_id, hit in scored]
+        scored.append((score, position, candidate.hit))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [hit for _score, _position, hit in scored]
 
 
-def _page_orders(probes: list[_Probe], entry_id: str) -> tuple[int, int, int]:
-    """Return the orders that the Memory gave one page.
+def _coverage(candidate: _Candidate, terms: tuple[str, ...], weights: dict[str, float]) -> float:
+    """Return how much of the question a page carries.
 
-    The first order is the best order of the page over all the queries, the
-    second one the best order over the queries that can tell the pages of the
-    document apart, and the third one the order of the whole question.
+    A word of the question that the page carries is worth more when few pages
+    of the document carry it.
     """
 
-    best = _SEARCH_MISSING_RANK
-    best_informative = _SEARCH_MISSING_RANK
-    question_rank = _SEARCH_MISSING_RANK
-    for probe in probes:
-        rank = probe.order.get(entry_id)
-        if rank is None:
-            continue
-        if rank < best:
-            best = rank
-        if probe.kind == "question" and rank < question_rank:
-            question_rank = rank
-        if probe.spread <= _SEARCH_INFORMATIVE_SPREAD and rank < best_informative:
-            best_informative = rank
-    return best, best_informative, question_rank
+    coverage = 0.0
+    for term in terms:
+        count = _term_count(candidate, term)
+        if count:
+            coverage += weights.get(term, 0.0) * (1.0 + math.log(count))
+    return coverage
+
+
+def _probe_rarity(probe: _Probe, pages: dict[str, _Candidate], corpus: int) -> float:
+    """Return how much one query of the question tells the pages apart.
+
+    A query that matches almost every page of the document cannot tell the pages
+    apart, so its order carries little evidence.  The pages of the document that
+    carry every word of the query are the pages that the query can tell apart.
+    """
+
+    if corpus <= 0:
+        return 0.0
+    words = tuple(_TOKEN.findall(probe.query.casefold()))
+    if not words:
+        return 0.0
+    matching = sum(1 for candidate in pages.values() if all(word in candidate.body_counts for word in words))
+    return 1.0 - matching / corpus
 
 
 def _target_document(
@@ -743,9 +833,9 @@ def _target_document(
         if matched > matches.get(document, 0):
             matches[document] = matched
     if matches:
-        best = max(matches.items(), key=lambda item: (item[1], item[0]))
-        if best[1] > 0:
-            return best[0]
+        best = _best_document(matches)
+        if best is not None:
+            return best
     weights: dict[str, float] = {}
     for probe in probes:
         if probe.kind != "question":
@@ -756,8 +846,29 @@ def _target_document(
                 continue
             weights[candidate.document] = weights.get(candidate.document, 0.0) + 1.0 / (60.0 + rank)
     if weights:
-        return max(weights.items(), key=lambda item: (item[1], item[0]))[0]
+        return _best_document(weights)
     return None
+
+
+def _best_document(matches: dict[str, int]) -> str | None:
+    """Return the document that the terms of the question name best.
+
+    The terms of a question name one document of the scope, and a term that
+    every document of the scope carries names none of them.  A document is
+    therefore only returned when it carries more named terms than every other
+    document of the scope.  Otherwise the question names no document, and the
+    order of the whole question decides.
+    """
+
+    if not matches:
+        return None
+    best = max(matches.values())
+    if best <= 0:
+        return None
+    leaders = sorted(document for document, count in matches.items() if count == best)
+    if len(leaders) > 1:
+        return None
+    return leaders[0]
 
 
 def _document_match(candidate: _Candidate, terms: tuple[str, ...]) -> int:
@@ -768,20 +879,131 @@ def _document_match(candidate: _Candidate, terms: tuple[str, ...]) -> int:
     whose document carries one of the question terms belongs to the document that
     the question asks about.  Without this signal the pages of the other documents
     win whenever they repeat the generic words of the question.
+
+    A document is named by the words of its name alone, so the years and the
+    kind of the document are not part of the name and do not name a document.
+    A report is also named by the short form of its name ("AMEX" for
+    "American Express"), so a word of the question that is the short form of
+    the name of a document names that document.
     """
 
     tokens = candidate.document_tokens
     stems = {_stem(token) for token in tokens}
+    name = _document_name(tokens)
+    parts = candidate.document_parts
     matched = 0
     for term in terms:
-        for form in _term_forms(term):
-            if form in tokens or _stem(form) in stems:
-                matched += 1
-                break
-            if any(form in token for token in tokens if len(token) >= 4):
-                matched += 1
-                break
+        if _term_names_document(term, tokens, stems, name, parts):
+            matched += 1
     return matched
+
+def _document_name(tokens: tuple[str, ...]) -> str:
+    """Return the name of a document without its year and without its kind.
+
+    A document id names a report, and the report is named by the words of the
+    id that are neither the year of the report nor the kind of the report.
+    """
+
+    words = [token for token in tokens if not token.isdigit()]
+    kinds = ("10k", "10q", "8k", "earnings")
+    kept = [token for token in words if token not in kinds]
+    return "".join(kept)
+
+
+def _document_parts(document: str) -> tuple[str, ...]:
+    """Return the words of the name of a document, one word at a time.
+
+    A document id holds the name of the report in one piece, as in
+    "AMERICANEXPRESS", so the name is split at the places where the writing of
+    a word begins, and the short form of the name can be told from the name
+    itself.
+    """
+
+    parts: list[str] = []
+    for piece in re.split(r"[^0-9A-Za-z]+", document):
+        if not piece or piece.isdigit():
+            continue
+        if piece.casefold() in ("10k", "10q", "8k", "earnings"):
+            continue
+        parts.extend(_split_name_word(piece))
+    return tuple(parts)
+
+
+def _split_name_word(token: str) -> list[str]:
+    """Return the words that one word of a name is written with.
+
+    A name written in one piece holds several words, and the place where a
+    word begins is the place where a capital letter follows a small letter.
+    """
+
+    pieces = []
+    current = ""
+    for index, character in enumerate(token):
+        if character.isupper() and current and index > 0 and not token[index - 1].isupper():
+            pieces.append(current)
+            current = character
+        else:
+            current += character
+    if current:
+        pieces.append(current)
+    return pieces or [token]
+
+
+def _split_name_word(token: str) -> list[str]:
+    """Return the words that one word of a name is written with.
+
+    A name written in one piece holds several words, and the place where a
+    word begins is the place where a capital letter follows a small letter.
+    """
+
+    pieces = []
+    current = ""
+    for index, character in enumerate(token):
+        if character.isupper() and current and index > 0 and not token[index - 1].isupper():
+            pieces.append(current)
+            current = character
+        else:
+            current += character
+    if current:
+        pieces.append(current)
+    return pieces or [token]
+
+
+def _term_names_document(
+    term: str,
+    tokens: tuple[str, ...],
+    stems: set[str],
+    name: str,
+    parts: tuple[str, ...] = (),
+) -> bool:
+    """Return whether one word of the question names one document.
+
+    A word names a document when the name of the document carries it.  The
+    words that every document of a scope carries, such as the year of the
+    report, name no document at all.
+    """
+
+    if not name:
+        return False
+    name_tokens = tuple(_TOKEN.findall(name))
+    name_stems = {_stem(token) for token in name_tokens}
+    for form in _term_forms(term):
+        if form in name_tokens or _stem(form) in name_stems:
+            return True
+        if any(form in token for token in name_tokens if len(token) >= 4):
+            return True
+    # The short form of a name names the document of that name.
+    if len(term) >= 3 and term.isalpha():
+        letters = "".join(character for character in term if character.isalpha())
+        if letters != name and len(letters) >= 3 and name.startswith(letters):
+            return True
+        if (
+            len(parts) >= 2
+            and len(letters) == len(parts)
+            and all(letter == part[0].casefold() for letter, part in zip(letters, parts, strict=True))
+        ):
+            return True
+    return False
 
 
 def _probe_terms(probe: _Probe, terms: tuple[str, ...]) -> tuple[str, ...]:
@@ -795,6 +1017,33 @@ def _probe_terms(probe: _Probe, terms: tuple[str, ...]) -> tuple[str, ...]:
                 carried.append(term)
                 break
     return tuple(carried)
+
+
+def _local_inverse_frequency(document_frequency: int, corpus: int) -> float:
+    """Return how much one term narrows the document of the question."""
+
+    if document_frequency <= 0:
+        return 0.0
+    return math.log(1.0 + (corpus - document_frequency + 0.5) / (document_frequency + 0.5))
+
+
+def _heading_overlap(candidate: _Candidate, terms: tuple[str, ...], weights: dict[str, float]) -> float:
+    """Return how many words of the question the heading of the page carries.
+
+    The heading of a page names its section, and a question about a section
+    names the section as well.
+    """
+
+    header = candidate.tokens[:_SEARCH_HEADER_TOKENS]
+    header_set = set(header)
+    header_stems = {_stem(token) for token in header}
+    overlap = 0.0
+    for term in terms:
+        for form in _term_forms(term):
+            if form in header_set or _stem(form) in header_stems:
+                overlap += weights.get(term, 0.0)
+                break
+    return overlap
 
 
 def _is_statement_page(tokens: tuple[str, ...]) -> bool:
@@ -818,16 +1067,34 @@ def _is_statement_page(tokens: tuple[str, ...]) -> bool:
 def _term_count(candidate: _Candidate, term: str) -> int:
     """Return how often one question term occurs in one page."""
 
+    return _term_count_in(candidate.counts, candidate.stems, term)
+
+
+def _term_count_in(counts: Counter[str], stems: Counter[str], term: str) -> int:
+    """Return how often one question term occurs in a set of page words.
+
+    The exact form of the term wins over the stemmed form, so that a page that
+    writes the word of the question counts it once, whichever form the page
+    uses.
+    """
+
     forms = _term_forms(term)
     for form in forms:
-        exact = candidate.counts.get(form, 0)
+        exact = counts.get(form, 0)
         if exact:
             return exact
     for form in forms:
-        stemmed = candidate.stems.get(_stem(form), 0)
+        stemmed = stems.get(_stem(form), 0)
         if stemmed:
             return stemmed
     return 0
+
+
+def _term_count_from(counts: Counter[str], term: str) -> int:
+    """Return how often one question term occurs in a set of page words."""
+
+    stems = Counter(_stem(token) for token in counts)
+    return _term_count_in(counts, stems, term)
 
 
 def _term_forms(term: str) -> tuple[str, ...]:
