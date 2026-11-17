@@ -10,5 +10,6 @@
 | 编码 | `02-qoder-site-implementation.jpg` | Qoder 完成站点架构、检索演示等功能并提交 |
 | 验证 | `03-qoder-real-seekdb-verification.jpg` | seekdb 实例上运行端到端自测与单元测试 |
 | 调试 | `04-qoder-debug-and-diff.jpg` | Qoder 对自测日期问题的修复及代码 diff |
+| 发布 | `05-qoder-sites-publication.jpg` | Qoder Sites 显示站点已发布，访问范围为「任何人都可访问」 |
 
-发布站点的记录将在 Qoder Sites 发布完成后补入本目录。
+公开站点：https://paper-compass-3svx6t90ky1.qoder.website/

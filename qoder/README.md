@@ -1,5 +1,7 @@
 # 文献罗盘 PaperCompass · Qoder × seekdb
 
+**Qoder Sites 公开站点**：[文献罗盘 PaperCompass](https://paper-compass-3svx6t90ky1.qoder.website/)（未登录可访问）。Qoder 开发、seekdb 自测与发布证据见 `evidence/`。
+
 > 把论文、课程笔记、实验记录丢进来，用一句自然语言问「混合检索怎么融合两路结果」，
 > 立刻定位到段落与出处；顺手把这篇排进复习计划，下次打开还记得该复习什么。
 

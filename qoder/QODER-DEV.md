@@ -1,5 +1,7 @@
 # Qoder 开发记录与后续动作
 
+> 2026-11-17 更新：项目已在 Qoder 中开发并通过 Qoder Sites 发布到 https://paper-compass-3svx6t90ky1.qoder.website/，可见范围为「任何人都可访问」。Qoder 账号 UID、开发截图和发布截图见 `evidence/qoder-dev/`。下文任务清单保留作为开发过程说明。
+
 > 这份文件是给**参赛者本人**的执行清单：题面明确要求「项目的主要开发工作必须在 Qoder 中完成」
 > 并提交「Qoder 开发记录」，所以下面每一步都要在 Qoder（桌面端 / IDE / JetBrains 插件 / CLI 均可）里操作，
 > 并把对话截图或录屏存到 `qoder/evidence/qoder-dev/`。
