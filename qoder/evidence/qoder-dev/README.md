@@ -2,17 +2,13 @@
 
 按题面要求，需要提交「关键开发环节的 Qoder 对话截图或录屏，并附 Qoder 账号 UID」。
 
-建议至少覆盖四个环节，每个环节 1–2 张截图：
+账号 UID 见 [QODER-UID.txt](QODER-UID.txt)。以下文件是 Qoder 客户端中真实开发会话的截图：
 
-| 环节 | 示例文件名 | 内容 |
+| 环节 | 文件 | 内容 |
 | --- | --- | --- |
-| 需求拆解 | `01-需求拆解.png` | 让 Qoder 拆解「文献检索 + 复习记忆」的需求，给出模块划分 |
-| 编码 | `02-编码-向量provider.png` | QODER-DEV.md 任务 1 的实现过程与 diff |
-| 编码 | `03-编码-单元测试.png` | QODER-DEV.md 任务 2 的测试编写与 `npm test` 输出 |
-| 调试 | `04-调试-检索命中排查.png` | 排查一次检索不命中的过程（例如中文分词 / 索引刷新） |
-| 调试 | `05-调试-seekdb索引核对.png` | 在 seekdb 上核对 FULLTEXT / VECTOR 索引与命中数据 |
-| 发布 | `06-发布-Qoder-Sites.png` | Qoder Sites 里创建并发布站点、设置「任何人都可访问」 |
+| 需求与编码 | `01-qoder-site-task-and-coding.jpg` | 用户提出展示站需求，Qoder 检查站点结构并开始修改 |
+| 编码 | `02-qoder-site-implementation.jpg` | Qoder 完成站点架构、检索演示等功能并提交 |
+| 验证 | `03-qoder-real-seekdb-verification.jpg` | seekdb 实例上运行端到端自测与单元测试 |
+| 调试 | `04-qoder-debug-and-diff.jpg` | Qoder 对自测日期问题的修复及代码 diff |
 
-同时在 `qoder/QODER-DEV.md` 的「提测表单要填什么」一节填上你的 **Qoder 账号 UID**。
-
-> 图片命名随意，但请保证能看出是哪个环节；录屏同样可以放在本目录。
+发布站点的记录将在 Qoder Sites 发布完成后补入本目录。
