@@ -56,7 +56,7 @@ _COMPANY_NAME_SCAN = 4000
 
 # Retrieval tuning.  The values are deliberately generic: they rank one page against
 # another for one question and never encode a document, a page or an answer.
-_SEARCH_PROBE_LIMIT = 128
+_SEARCH_PROBE_LIMIT = 256
 _SEARCH_MAX_TERMS = 24
 # A query that matches almost every page of the document can not tell the pages of
 # the document apart, so its order does not count as evidence.
@@ -70,13 +70,39 @@ _SEARCH_RANK_OFFSET = 5.0
 # every page of the document tells the pages hardly apart, so the order counts
 # less than the order of a query that matches few pages.
 _SEARCH_PROBE_WEIGHT = 0.5
+# The weight of the order of the queries that look for the statements of the
+# report.  The order of such a query tells the pages of the statements apart,
+# so it counts as evidence like the order of any other query.
+_SEARCH_STATEMENT_PROBE_WEIGHT = 0.6
 # The weight of the words of the question that a page carries, of the heading of
 # the page and of the page being a page of the statements of the report.
 _SEARCH_COVERAGE_WEIGHT = 0.02
 _SEARCH_HEADING_WEIGHT = 0.05
-_SEARCH_STATEMENT_WEIGHT = 0.3
+_SEARCH_STATEMENT_WEIGHT = 0.6
+# The words of a question that ask for a metric of the statements of a report.
+# A question that asks for such a metric is answered by the statements, and a
+# question that asks for nothing of them is answered by the narrative of the
+# report.
+_SEARCH_METRIC_WORDS = frozenset(
+    [
+        "margin", "margins", "rate", "rates", "ratio", "ratios", "share", "shares",
+        "percentage", "percent", "growth", "revenue", "revenues", "income", "cost",
+        "costs", "expense", "expenses", "profit", "profits", "loss", "losses",
+        "earnings", "ebit", "ebitda", "eps", "tax", "taxes", "dividend", "dividends",
+        "balance", "debt", "assets", "liabilities", "equity", "segment", "segments",
+        "gross", "compensation", "depreciation", "amortization", "capex", "capital",
+        "payable", "receivable", "inventory", "cogs", "dpo", "dso", "cash", "working",
+    ]
+)
 # The heading of a page names its section.
 _SEARCH_HEADER_TOKENS = 40
+# A report carries one subject on a page and a subject runs over several pages, so
+# a page that stands next to a page the question is about is a page the question
+# is about as well.  The pages next to a page are therefore lifted by the score of
+# the page they stand next to, and the pages two steps away are lifted by half of
+# it.
+_SEARCH_NEIGHBOUR_WEIGHT = 0.4
+_SEARCH_NEIGHBOUR_SPAN = 2
 # The pages of the statements of the report carry the numbers of the metrics.
 # Their titles are searched as well, so that a question about a metric reaches
 # the statement that carries the numbers of the metric.
@@ -367,6 +393,8 @@ _STATEMENT_TITLES = tuple(
         "consolidated statements of income",
         "consolidated statement of cash flow",
         "consolidated statements of cash flow",
+        "consolidated statement of cash flows",
+        "consolidated statements of cash flows",
         "consolidated statement of comprehensive income",
         "consolidated statements of comprehensive income",
         "consolidated statement of stockholders",
@@ -577,7 +605,8 @@ async def search_pdf_pages(memory: Any, question: str, limit: int = 10) -> tuple
     candidates, probes = await _harvest_candidates(memory, question, terms, SearchMemoryRequest)
     if not candidates:
         return ()
-    ranked = _rank_candidates(candidates, probes, terms)
+    locations = await _page_locations(memory)
+    ranked = _rank_candidates(candidates, probes, terms, locations)
     return tuple(
         MemoryCitation(
             memory_ref=hit.memory_ref,
@@ -586,6 +615,48 @@ async def search_pdf_pages(memory: Any, question: str, limit: int = 10) -> tuple
         )
         for hit in ranked[:limit]
     )
+
+
+async def _page_locations(memory: Any) -> dict[str, tuple[str, int]]:
+    """Return the document and the physical page of every entry of the scope.
+
+    The text of a page carries the document but not the number of the page, and
+    the number of the page is what tells the pages of a document apart.  The
+    entries of the scope are read through the public Memory API, and the number
+    of the page is read from the identity of the Source of the page, which the
+    Definition of this module writes itself.
+    """
+
+    try:
+        page = await memory.list()
+    except Exception:
+        return {}
+    locations: dict[str, tuple[str, int]] = {}
+    for record in getattr(page, "entries", ()):
+        entry = getattr(record, "entry", None)
+        if entry is None:
+            continue
+        for reference in getattr(entry, "sources", ()):
+            if getattr(reference, "source_type", "") != PDF_PAGE_SOURCE_NAME:
+                continue
+            number = _page_number_of_source(getattr(reference, "source_id", ""))
+            if number is None:
+                continue
+            document = entry.text.partition("\n")[0].strip()
+            if document:
+                locations[entry.entry_id] = (document, number)
+            break
+    return locations
+
+
+def _page_number_of_source(source_id: str) -> int | None:
+    """Return the physical page that the identity of a page Source carries."""
+
+    _prefix, _separator, number = source_id.rpartition(":")
+    if not number.isdigit():
+        return None
+    page = int(number)
+    return page if page > 0 else None
 
 
 @dataclass(slots=True)
@@ -647,8 +718,8 @@ async def _harvest_candidates(
             if candidate is None:
                 candidate = _Candidate(hit=hit)
                 candidates[hit.entry_id] = candidate
+                _index_candidate(candidate, hit.text)
             candidate.hit = hit
-            _index_candidate(candidate, hit.text)
         probes.append(probe)
     return candidates, probes
 
@@ -739,6 +810,7 @@ def _rank_candidates(
     candidates: dict[str, _Candidate],
     probes: list[_Probe],
     terms: tuple[str, ...],
+    locations: dict[str, tuple[str, int]] | None = None,
 ) -> list[Any]:
     """Order the retrieved pages by how much question evidence they carry.
 
@@ -749,6 +821,12 @@ def _rank_candidates(
     few pages of the document says more about a page than a query that matches
     almost every page of it.  The words of the question that a page carries, the
     heading of the page and the statements of the report are evidence as well.
+
+    A report carries one subject on a page and a subject runs over several
+    pages, so a page that stands next to a page the question is about is a page
+    the question is about as well.  The pages next to a page therefore receive
+    the score of the page they stand next to, and the pages two steps away
+    receive half of it.
     """
 
     target = _target_document(candidates, probes, terms)
@@ -769,22 +847,83 @@ def _rank_candidates(
         probe.order = {entry_id: position for position, (_rank, entry_id) in enumerate(inside, start=1)}
         probe.terms = _probe_terms(probe, terms)
         probe.rarity = _probe_rarity(probe, pages, corpus)
-    scored: list[tuple[float, int, Any]] = []
+    scores: dict[str, float] = {}
+    order: dict[str, int] = {}
+    metric = any(term in _SEARCH_METRIC_WORDS for term in terms)
+    statement = _SEARCH_STATEMENT_WEIGHT if metric else 0.0
     for position, (entry_id, candidate) in enumerate(pages.items()):
         score = 0.0
         for probe in probes:
-            if probe.kind == "statement":
-                continue
             rank = probe.order.get(entry_id)
             if rank is None:
+                continue
+            if probe.kind == "statement":
+                score += _SEARCH_STATEMENT_PROBE_WEIGHT * probe.rarity / (_SEARCH_RANK_OFFSET + rank)
                 continue
             score += _SEARCH_PROBE_WEIGHT * probe.rarity / (_SEARCH_RANK_OFFSET + rank)
         score += _SEARCH_COVERAGE_WEIGHT * _coverage(candidate, terms, weights)
         score += _SEARCH_HEADING_WEIGHT * _heading_overlap(candidate, terms, weights)
-        score += _SEARCH_STATEMENT_WEIGHT * float(_is_statement_page(candidate.tokens))
-        scored.append((score, position, candidate.hit))
-    scored.sort(key=lambda item: (-item[0], item[1]))
+        score += statement * float(_is_statement_page(candidate.tokens))
+        scores[entry_id] = score
+        order[entry_id] = position
+    _lift_neighbours(scores, pages, locations)
+    scored = sorted(
+        ((scores[entry_id], order[entry_id], candidate.hit) for entry_id, candidate in pages.items()),
+        key=lambda item: (-item[0], item[1]),
+    )
     return [hit for _score, _position, hit in scored]
+
+
+def _lift_neighbours(
+    scores: dict[str, float],
+    pages: dict[str, _Candidate],
+    locations: dict[str, tuple[str, int]] | None,
+) -> None:
+    """Lift the pages that stand next to a page the question is about."""
+
+    if not locations:
+        return
+    by_place = _pages_by_place(pages, locations)
+    for entry_id, share in _neighbour_bonus(scores, locations, by_place).items():
+        scores[entry_id] = scores.get(entry_id, 0.0) + share
+
+
+def _pages_by_place(
+    pages: dict[str, _Candidate],
+    locations: dict[str, tuple[str, int]],
+) -> dict[tuple[str, int], str]:
+    """Return the retrieved pages by the place they hold in their document."""
+
+    by_place: dict[tuple[str, int], str] = {}
+    for entry_id, candidate in pages.items():
+        place = locations.get(entry_id)
+        if place is None or candidate.document != place[0]:
+            continue
+        by_place[place] = entry_id
+    return by_place
+
+
+def _neighbour_bonus(
+    scores: dict[str, float],
+    locations: dict[str, tuple[str, int]],
+    by_place: dict[tuple[str, int], str],
+) -> dict[str, float]:
+    """Return the lift that every page receives from the pages next to it."""
+
+    bonus: dict[str, float] = {}
+    for entry_id, place in locations.items():
+        score = scores.get(entry_id)
+        if score is None:
+            continue
+        for step in range(1, _SEARCH_NEIGHBOUR_SPAN + 1):
+            for number in (place[1] - step, place[1] + step):
+                neighbour = by_place.get((place[0], number))
+                if neighbour is None:
+                    continue
+                share = score * _SEARCH_NEIGHBOUR_WEIGHT / step
+                if share > bonus.get(neighbour, 0.0):
+                    bonus[neighbour] = share
+    return bonus
 
 
 def _coverage(candidate: _Candidate, terms: tuple[str, ...], weights: dict[str, float]) -> float:
@@ -1016,26 +1155,6 @@ def _split_name_word(token: str) -> list[str]:
     return pieces or [token]
 
 
-def _split_name_word(token: str) -> list[str]:
-    """Return the words that one word of a name is written with.
-
-    A name written in one piece holds several words, and the place where a
-    word begins is the place where a capital letter follows a small letter.
-    """
-
-    pieces = []
-    current = ""
-    for index, character in enumerate(token):
-        if character.isupper() and current and index > 0 and not token[index - 1].isupper():
-            pieces.append(current)
-            current = character
-        else:
-            current += character
-    if current:
-        pieces.append(current)
-    return pieces or [token]
-
-
 def _term_names_document(
     term: str,
     tokens: tuple[str, ...],
@@ -1081,7 +1200,27 @@ def _short_form_names_document(
     if letters != name and len(letters) >= 3 and name.startswith(letters):
         return True
     acronyms = _document_acronyms(parts) + _document_acronyms(words)
-    return any(letters == acronym for acronym in acronyms)
+    if any(letters == acronym for acronym in acronyms):
+        return True
+    return _is_short_form_of(letters, name)
+
+
+def _is_short_form_of(letters: str, name: str) -> bool:
+    """Return whether the letters of a short form name a name in order.
+
+    A short form of a name keeps the letters of the name in the order they are
+    written, as in "AMEX" for "AMERICANEXPRESS".  The short form must be
+    shorter than the name, and the name must be long enough for the short form
+    to stand for it alone.
+    """
+
+    if len(letters) < 3 or len(letters) >= len(name) or len(name) < 2 * len(letters):
+        return False
+    position = 0
+    for character in name:
+        if position < len(letters) and character == letters[position]:
+            position += 1
+    return position == len(letters)
 
 
 def _document_acronyms(parts: tuple[str, ...]) -> tuple[str, ...]:
