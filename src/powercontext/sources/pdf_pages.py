@@ -65,7 +65,7 @@ _SEARCH_MISSING_RANK = 10**6
 # The order that the Memory gives the pages of a query is the evidence of the
 # query, and the page that a query of the question puts in front is the page that
 # carries the metric of the question.
-_SEARCH_RANK_OFFSET = 5.0
+_SEARCH_RANK_OFFSET = 3.0
 # The weight of the order of one query.  The order of a query that matches almost
 # every page of the document tells the pages hardly apart, so the order counts
 # less than the order of a query that matches few pages.
